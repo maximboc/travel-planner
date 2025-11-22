@@ -45,13 +45,6 @@ class AmadeusAuth:
         return self.access_token
 
 
-# Initialize auth (set your credentials via environment variables)
-amadeus_auth = AmadeusAuth(
-    api_key="VQGubWZXZoGBV8eyUpPMPtNM9IG5AF20",  # os.getenv("AMADEUS_API_KEY", ""),
-    api_secret="W1p33Wp7AzR4SZrN",  # os.getenv("AMADEUS_API_SECRET", "YOUR_API_SECRET")
-)
-
-
 class FlightSearchInput(BaseModel):
     """Input schema for flight search"""
 
@@ -83,6 +76,12 @@ class FlightSearchTool(BaseTool):
     Returns flight details including prices, airlines, duration, and layover information.
     Input should include origin, destination, and departure date at minimum.
     """
+    amadeus_auth: AmadeusAuth = None
+
+    def __init__(self, amadeus_auth: AmadeusAuth):
+        super().__init__()
+        self.amadeus_auth = amadeus_auth
+
     args_schema: Type[BaseModel] = FlightSearchInput
 
     def _run(
@@ -97,8 +96,8 @@ class FlightSearchTool(BaseTool):
     ) -> str:
         """Search for flights"""
         try:
-            token = amadeus_auth.get_access_token()
-            url = f"{amadeus_auth.base_url}/v2/shopping/flight-offers"
+            token = self.amadeus_auth.get_access_token()
+            url = f"{self.amadeus_auth.base_url}/v2/shopping/flight-offers"
 
             headers = {"Authorization": f"Bearer {token}"}
             params = {
@@ -191,12 +190,17 @@ class HotelSearchTool(BaseTool):
     Input requires city code, check-in date, and check-out date at minimum.
     """
     args_schema: Type[BaseModel] = HotelSearchInput
+    amadeus_auth: AmadeusAuth = None
+
+    def __init__(self, amadeus_auth: AmadeusAuth):
+        super().__init__()
+        self.amadeus_auth = amadeus_auth
 
     def _get_hotel_ids_by_city(
         self, token: str, city_code: str, radius: int = 5, max_hotels: int = 20
     ) -> List[str]:
         """Step 1: Get hotel IDs from Hotel List API"""
-        url = f"{amadeus_auth.base_url}/v1/reference-data/locations/hotels/by-city"
+        url = f"{self.amadeus_auth.base_url}/v1/reference-data/locations/hotels/by-city"
 
         headers = {"Authorization": f"Bearer {token}"}
         params = {
@@ -230,7 +234,7 @@ class HotelSearchTool(BaseTool):
     ) -> str:
         """Search for hotels"""
         try:
-            token = amadeus_auth.get_access_token()
+            token = self.amadeus_auth.get_access_token()
 
             # Step 1: Get hotel IDs in the city
             hotel_ids = self._get_hotel_ids_by_city(
@@ -244,7 +248,7 @@ class HotelSearchTool(BaseTool):
                 return f"No hotels found in {city_code}."
 
             # Step 2: Search for offers using hotel IDs
-            url = f"{amadeus_auth.base_url}/v3/shopping/hotel-offers"
+            url = f"{self.amadeus_auth.base_url}/v3/shopping/hotel-offers"
 
             headers = {"Authorization": f"Bearer {token}"}
             params = {
@@ -326,13 +330,14 @@ class HotelSearchTool(BaseTool):
                 variations = price_info.get("variations", {}) or {}
                 avg_nightly = None
                 if "average" in variations and isinstance(variations["average"], dict):
-                    avg_nightly = variations["average"].get("total") or variations["average"].get("base")
+                    avg_nightly = variations["average"].get("total") or variations[
+                        "average"
+                    ].get("base")
 
                 # Room info and description
                 room = offer.get("room", {})
-                room_type = (
-                    room.get("typeEstimated", {}).get("category")
-                    or room.get("type", "Standard")
+                room_type = room.get("typeEstimated", {}).get("category") or room.get(
+                    "type", "Standard"
                 )
                 bed_info = room.get("typeEstimated", {}) or {}
                 beds = bed_info.get("beds", "N/A")
@@ -346,7 +351,11 @@ class HotelSearchTool(BaseTool):
                 # Policies
                 policies = offer.get("policies", {})
                 refundable_info = policies.get("refundable", {}) if policies else {}
-                cancellation = refundable_info.get("cancellationRefund") if refundable_info else None
+                cancellation = (
+                    refundable_info.get("cancellationRefund")
+                    if refundable_info
+                    else None
+                )
 
                 # Booking/link
                 self_link = offer.get("self") or hotel_data.get("self") or ""
@@ -355,12 +364,16 @@ class HotelSearchTool(BaseTool):
                 result_lines = [f"\nHotel {idx}: {hotel_name}"]
                 result_lines.append(f"Hotel ID: {hotel_id}")
                 result_lines.append(f"Offer ID: {offer_id}")
-                result_lines.append(f"Location: {city_code_resp} (Lat: {latitude}, Lon: {longitude})")
+                result_lines.append(
+                    f"Location: {city_code_resp} (Lat: {latitude}, Lon: {longitude})"
+                )
                 if phone:
                     result_lines.append(f"Contact Phone: {phone}")
                 if fax:
                     result_lines.append(f"Contact Fax: {fax}")
-                result_lines.append(f"Stay: {check_in} → {check_out} | Guests (adults): {adults} | Board: {board_type}")
+                result_lines.append(
+                    f"Stay: {check_in} → {check_out} | Guests (adults): {adults} | Board: {board_type}"
+                )
 
                 # Price block
                 price_line = f"Price: {total_price} {currency}".strip()
@@ -405,8 +418,14 @@ class HotelSearchTool(BaseTool):
         raise NotImplementedError("Async not supported yet")
 
 
+"""
 # Example usage
 if __name__ == "__main__":
+    # Initialize auth (set your credentials via environment variables)
+    amadeus_auth = AmadeusAuth(
+        api_key="VQGubWZXZoGBV8eyUpPMPtNM9IG5AF20",  # os.getenv("AMADEUS_API_KEY", ""),
+        api_secret="W1p33Wp7AzR4SZrN",  # os.getenv("AMADEUS_API_SECRET", "YOUR_API_SECRET")
+    )
     # Initialize the tools
     flight_tool = FlightSearchTool()
     hotel_tool = HotelSearchTool()
@@ -448,3 +467,4 @@ if __name__ == "__main__":
     # )
     #
     # agent.run("Find me flights from New York to Paris for December 15-22 and hotels in Paris")
+"""

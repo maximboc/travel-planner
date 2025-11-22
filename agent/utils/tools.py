@@ -18,90 +18,57 @@ def convert_messages(runtime: ToolRuntime):
 @tool
 def find_place_details(query: str) -> str:
     """
-    Searches for a specific location, landmark, or address using OpenStreetMap Nominatim.
-    Use this to find coordinates (latitude, longitude) or verify a location's details.
+    Searches for locations using OpenStreetMap.
+
+    IMPORTANT: This tool works best with specific categories + city names.
+    Examples of good queries:
+    - "Beaches in Nice, France"
+    - "Art Museums in Tokyo"
+    - "Eiffel Tower, Paris"
 
     Args:
-        query: The name of the place to search for (e.g., 'Eiffel Tower, Paris', '1600 Amphitheatre Parkway, Mountain View').
+        query: The search string. Combine the category and the city (e.g., 'Parks in London').
 
     Returns:
-        A string with a list of matching locations, including their full name, type, and coordinates.
+        A formatted string of the top 3 matching locations with coordinates.
     """
     try:
-        headers = {
-            "User-Agent": "LangChainTravelAgent (SchoolProject; )"
-        }
-
-        # Nominatim Search API endpoint
+        headers = {"User-Agent": "LangChainTravelAgent/1.0"}  # Updated User-Agent
         url = "https://nominatim.openstreetmap.org/search"
-        
+
         params = {
             "q": query.strip(),
-            "format": "jsonv2",      # Request the modern JSONv2 format
-            "addressdetails": 1,  # Include address breakdown (city, country, etc.)
-            "limit": 3            # Return the top 3 most relevant results
+            "format": "jsonv2",
+            "addressdetails": 1,
+            "limit": 3,
         }
 
         response = requests.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-
+        response.raise_for_status()
         data = response.json()
 
         if not data:
-            return f"Error: No results found for '{query}'. Please try a different or more specific query."
+            return f"No results found for '{query}'. Try a broader category (e.g., 'Museums' instead of 'Modern Art')."
 
-        # Format the results cleanly for the LLM
         results = []
         for i, item in enumerate(data, 1):
-            name = item.get("display_name", "N/A")
-            osm_type = item.get("type", "N/A") # What kind of place is it?
+            name = item.get("display_name", "N/A").split(",")[0]  # Clean up name
+            full_address = item.get("display_name", "N/A")
+            osm_type = item.get("type", "N/A")
             lat = item.get("lat", "N/A")
             lon = item.get("lon", "N/A")
-            
-            # Try to get city and country from the address details
-            address = item.get("address", {})
-            city = address.get("city", address.get("town", address.get("village", "N/A")))
-            country = address.get("country", "N/A")
 
             results.append(
-                f"Result {i}:\n"
-                f"  Name: {name}\n"
-                f"  Location: {city}, {country}\n"
-                f"  Type: {osm_type}\n"
-                f"  Coordinates: (lat={lat}, lon={lon})"
+                f"Place {i}: {name}\n"
+                f"Type: {osm_type}\n"
+                f"Full Address: {full_address}\n"
+                f"Coords: {lat}, {lon}"
             )
-        
+
         return "\n---\n".join(results)
 
-    except requests.exceptions.RequestException as e:
-        return f"Error: Unable to connect to Nominatim location service. {str(e)}"
     except Exception as e:
-        return f"Error searching for location: {str(e)}"
-
-@tool
-def flight_finder(destination, dates):
-    """
-    Find flights to a destination on given dates.
-    """
-    return f"Flight details: Found flights to {destination} on {dates} (e.g., UA 123)"
-
-
-@tool
-def hotel_finder(destination, dates):
-    """
-    Find hotels in a destination for given dates.
-    """
-    return (
-        f"Hotel details: Found hotels in {destination} for {dates} (e.g., 'The Plaza')"
-    )
-
-
-@tool
-def weather_checker(destination, dates):
-    """
-    Check the weather forecast for a destination on given dates.
-    """
-    return f"Weather forecast for {destination} from {dates}: sunny and warm"
+        return f"Error searching map: {str(e)}"
 
 
 @tool
