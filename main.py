@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from agent.utils.amadeus import AmadeusAuth, FlightSearchTool, HotelSearchTool
+from agent.utils.amadeus import AmadeusAuth, FlightSearchTool, HotelSearchTool, CitySearchTool
 from agent.utils.tools import get_exchange_rate, get_weather, find_place_details
 
 # --- 2. DEFINE THE STATE ---
@@ -21,11 +21,13 @@ amadeus_auth = AmadeusAuth(
 
 class PlanDetails(TypedDict):
     """The structured output from the 'Brain'"""
-
     destination: str
     origin: str
     departure_date: str
-    budget: str
+    arrival_date: str
+    budget: float
+    flight_budget: float
+    hotel_budget: float
     interests: str
     need_hotel: bool
     need_activities: bool
@@ -34,6 +36,8 @@ class PlanDetails(TypedDict):
 class AgentState(TypedDict):
     messages: Annotated[List, operator.add]  # Chat history
     plan: Optional[PlanDetails]  # The structured plan from Step 1
+    city_code: Optional[str]
+    origin_code: Optional[str]
     flight_data: Optional[str]  # Results from Step 2
     hotel_data: Optional[str]  # Results from Step 2b
     activity_data: Optional[str]  # Results from Step 3
@@ -77,37 +81,86 @@ def planner_node(state: AgentState):
     # -- PARSING LOGIC (Simplified for Demo) --
     # In a real app, parse the JSON strictly. Here we manually inject mock data
     # to ensure the pipeline works if the LLM doesn't output perfect JSON.
-
+    total_budget = 2000.0
     # Mocking the extraction for reliability in this example:
+    flight_cap = total_budget * 0.30 
+    hotel_total_cap = total_budget * 0.50
+    
     extracted_plan = {
-        "destination": "Nice, France",
+        "destination": "Milan, Italy",
         "origin": "New York",
         "departure_date": "2025-12-03",
-        "arrival_date": "2025-12-05",  # going back home
-        "budget": "Moderate",
+        "arrival_date": "2025-12-17", 
+        "budget": total_budget,
+        "flight_budget": flight_cap,       # Max $600
+        "hotel_budget": hotel_total_cap,   # Max $1000
         "interests": "Sunbathing, Culture",
-        "need_hotel": True,  # Change to False to test skipping hotel
-        "need_activities": True,  # Change to False to test skipping activities
+        "need_hotel": True,
+        "need_activities": True,
     }
-
+    print(f"Budget Breakdown -> Flights: ${flight_cap}, Hotel Total: ${hotel_total_cap}")
     return {"plan": extracted_plan}
 
+def city_resolver_node(state: AgentState):
+    """Step 1b: Resolve City Code for BOTH Origin and Destination"""
+    print("--- STEP 1b: CITY RESOLVER ---")
+    plan = state["plan"]
+    city_search = CitySearchTool(amadeus_auth=amadeus_auth)
+
+    # --- Helper function to avoid writing the same code twice ---
+    def resolve_iata(location_name):
+        clean_name = location_name.split(",")[0].strip()
+        print(f"Resolving code for: {clean_name}...")
+        
+        # 1. Search API
+        result_str = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
+        
+        # 2. Ask LLM to extract
+        resolver_prompt = f"""
+        I am looking for the IATA city code for: {location_name}.
+        Here are the search results:
+        {result_str}
+        
+        Extract the single 3-letter IATA code that best matches "{location_name}".
+        Return ONLY the 3-letter code (e.g. NYC). Nothing else.
+        """
+        code = llm.invoke(resolver_prompt).content.strip()
+        
+        # 3. Fallback/Validation
+        if len(code) != 3 or not code.isalpha():
+            print(f"Warning: Could not resolve code for {clean_name}. Defaulting.")
+            return "NYC" if "New York" in location_name else "PAR" # Safe defaults
+            
+        return code
+
+    # --- Execution ---
+    # Resolve Origin
+    origin_code = resolve_iata(plan["origin"])
+    
+    # Resolve Destination
+    dest_code = resolve_iata(plan["destination"])
+
+    print(f"Resolved Codes -> Origin: {origin_code}, Destination: {dest_code}")
+
+    # Update state with both
+    return {"origin_code": origin_code, "city_code": dest_code}
 
 def flight_node(state: AgentState):
     """Step 2: Logistics (Flights)"""
     print("--- STEP 2: FLIGHT AGENT ---")
     plan = state["plan"]
     search_flights = FlightSearchTool(amadeus_auth=amadeus_auth)
-    # Call the tool directly or use an LLM to call it
+    
+    # Use the resolved codes from state
     result = search_flights.invoke(
         {
-            "origin": plan["origin"],
-            "destination": plan["destination"],
+            "origin": state["origin_code"],
+            "destination": state["city_code"],
             "departure_date": plan["departure_date"],
             "arrival_date": plan["arrival_date"],
         }
     )
-
+    print(f"Flight : {result}")
     return {"flight_data": result}
 
 
@@ -115,10 +168,11 @@ def hotel_node(state: AgentState):
     """Step 2b: Logistics (Hotels) - Conditional"""
     print("--- STEP 2b: HOTEL AGENT ---")
     plan = state["plan"]
+    city_code = state["city_code"]
     search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
     result = search_hotels.invoke(
         {
-            "city_code": "NCE",  # plan["destination"],
+            "city_code": city_code,
             "budget": plan["budget"],
             "check_in_date": plan["departure_date"],
             "check_out_date": plan["arrival_date"],
@@ -214,6 +268,7 @@ workflow = StateGraph(AgentState)
 
 # Add Nodes
 workflow.add_node("planner", planner_node)
+workflow.add_node("city_resolver", city_resolver_node)
 workflow.add_node("flight_agent", flight_node)
 workflow.add_node("hotel_agent", hotel_node)
 workflow.add_node("activity_agent", activity_node)
@@ -222,74 +277,27 @@ workflow.add_node("compiler", compiler_node)
 # Set Entry Point
 workflow.add_edge(START, "planner")
 
-# Standard Edge: Planner -> Flight
-workflow.add_edge("planner", "flight_agent")
+# 1. Planner MUST go to City Resolver to get the code.
+workflow.add_edge("planner", "city_resolver")
 
-# Conditional Edge: Flight -> Hotel OR Check Activities
-workflow.add_conditional_edges(
-    "flight_agent",
-    check_hotel_condition,
-    {
-        "hotel_agent": "hotel_agent",
-        "check_activities": "activity_agent",  # Assuming if no hotel, check activities directly
-        # *Correction*: If no hotel, we must still check if activities are needed.
-        # But conditional_edges need a node to point to.
-        # Let's use a router function logic.
-    },
-)
+# 2. City Resolver then proceeds to the main Flight Agent.
+workflow.add_edge("city_resolver", "flight_agent")
 
-# We need a router specifically for the "No Hotel" path to check activities
-# Actually, simpler approach:
-# Flight -> Check Hotel -> (if no) -> Check Activity
-# Hotel -> Check Activity
+# --- CONDITIONAL PATHS (Using the clear v2 routers) ---
 
-workflow.add_conditional_edges(
-    "flight_agent",
-    lambda x: "hotel_agent" if x["plan"]["need_hotel"] else "activity_router_check",
-)
-
-workflow.add_conditional_edges(
-    "hotel_agent",
-    lambda x: "activity_router_check",  # After hotel, always go to check activities
-)
-
-# We define the routing logic for activities
-# Note: Since we can't point an edge to a "function" (only a node),
-# we usually use a dummy node or route directly to the target.
-# Here is the clean way:
-
-
-def activity_router(state: AgentState):
-    if state["plan"].get("need_activities"):
-        return "activity_agent"
-    return "compiler"
-
-
-# workflow.add_conditional_edges(
-#    "flight_agent",
-#    check_hotel_condition,
-#    {"hotel_agent": "hotel_agent", "check_activities": END},
-# )  # Wait, this needs to be wired carefully.
-
-# Let's Redefine Edges strictly following the diagram flow:
-
-# 1. Planner -> Flight
-workflow.add_edge("planner", "flight_agent")
-
-
-# 2. Flight -> Decide Hotel
-def route_after_flight(state):
+# 3. After Flight, decide: Hotel, Activity, or Compile/END.
+def route_after_flight_v2(state: AgentState):
     if state["plan"]["need_hotel"]:
         return "hotel_agent"
+    # If no hotel, check for activities
     elif state["plan"]["need_activities"]:
         return "activity_agent"
     else:
         return "compiler"
 
-
 workflow.add_conditional_edges(
     "flight_agent",
-    route_after_flight,
+    route_after_flight_v2,
     {
         "hotel_agent": "hotel_agent",
         "activity_agent": "activity_agent",
@@ -297,23 +305,26 @@ workflow.add_conditional_edges(
     },
 )
 
-
-# 3. Hotel -> Decide Activity (The diagram shows Hotel flows to Activity Check)
-def route_after_hotel(state):
+# 4. After Hotel, decide Activity or Compile/END.
+def route_after_hotel_v2(state: AgentState):
     if state["plan"]["need_activities"]:
         return "activity_agent"
     else:
         return "compiler"
 
-
 workflow.add_conditional_edges(
     "hotel_agent",
-    route_after_hotel,
-    {"activity_agent": "activity_agent", "compiler": "compiler"},
+    route_after_hotel_v2,
+    {
+        "activity_agent": "activity_agent",
+        "compiler": "compiler",
+    },
 )
 
-# 4. Activity -> Compiler
+# 5. Activity -> Compiler
 workflow.add_edge("activity_agent", "compiler")
+
+# 6. Compiler -> END
 workflow.add_edge("compiler", END)
 
 # --- 6. COMPILE & RUN ---
