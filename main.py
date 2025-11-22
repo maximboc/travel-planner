@@ -6,6 +6,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+import json
+import re
+from datetime import datetime
 
 from agent.utils.amadeus import AmadeusAuth, FlightSearchTool, HotelSearchTool, CitySearchTool
 from agent.utils.tools import get_exchange_rate, get_weather, find_place_details
@@ -25,7 +28,8 @@ class PlanDetails(TypedDict):
     origin: str
     departure_date: str
     arrival_date: str
-    budget: float
+    total_budget: float
+    remaining_budget: float
     flight_budget: float
     hotel_budget: float
     interests: str
@@ -54,51 +58,73 @@ def planner_node(state: AgentState):
     print("--- STEP 1: PLANNER (THE BRAIN) ---")
     messages = state["messages"]
 
-    # We ask the LLM to check weather (using tool binding) then output a JSON plan
-    # Note: For simplicity in this demo, we force a JSON structure via prompt.
-    # In production, use .with_structured_output() if your LLM supports it.
-
-    system_msg = """You are a Travel Architect. Analyze the request. 
-    1. Call the weather tool if needed to check the destination.
-    2. Output a strict JSON summary of the trip details.
+    # 1. System Prompt
+    system_msg = """You are a Travel Architect. 
+    Extract details from the user request into a JSON format.
     
-    Expected JSON format inside <json> tags:
+    CRITICAL: You MUST output valid JSON.
+    Date Format: YYYY-MM-DD.
+    
+    Output JSON inside <json> tags:
     {
         "destination": "City, Country",
-        "origin": "City, Country (default New York if unknown)",
-        "departure_date": "Date string MUST BE formatted YYYY-MM-DD ",
-        "budget": "Budget string",
-        "interests": "User interests",
-        "need_hotel": true/false (based on request),
-        "need_activities": true/false (based on request)
+        "origin": "City, Country (default New York)",
+        "departure_date": "YYYY-MM-DD",
+        "arrival_date": "YYYY-MM-DD",
+        "budget": 2000, 
+        "interests": "string",
+        "need_hotel": true/false,
+        "need_activities": true/false
     }
     """
-
-    # Bind weather tool to this LLM instance
-    planner_llm = llm.bind_tools([get_weather])
-    response = planner_llm.invoke([SystemMessage(content=system_msg)] + messages)
-
-    # -- PARSING LOGIC (Simplified for Demo) --
-    # In a real app, parse the JSON strictly. Here we manually inject mock data
-    # to ensure the pipeline works if the LLM doesn't output perfect JSON.
-    total_budget = 2000.0
-    # Mocking the extraction for reliability in this example:
-    flight_cap = total_budget * 0.30 
-    hotel_total_cap = total_budget * 0.50
     
+    # 2. Invoke LLM
+    response = llm.invoke([SystemMessage(content=system_msg)] + messages)
+    content = response.content
+
+    # 3. Robust Parsing
+    try:
+        if "<json>" in content:
+            json_str = content.split("<json>")[1].split("</json>")[0]
+        else:
+            # Try to find the first { and last }
+            json_str = content[content.find("{"):content.rfind("}")+1]
+        
+        plan_data = json.loads(json_str)
+    except Exception as e:
+        print(f"⚠️ JSON Parsing failed: {e}. Using raw defaults.")
+        plan_data = {}
+    
+    # 4. DATA SANITIZATION (The Fix for your Error)
+    # We use .get() and provide a hard fallback if it returns None
+    
+    # Default to 2 weeks from now if date is missing
+    default_date = "2025-12-03" 
+    
+    dept_date = plan_data.get("departure_date")
+    if not dept_date:
+        print(f"⚠️ Warning: 'departure_date' was None. Defaulting to {default_date}")
+        dept_date = default_date
+
+    # Handle Budget
+    try:
+        total_budget = float(plan_data.get("budget", 2000))
+    except:
+        total_budget = 2000.0
+
     extracted_plan = {
-        "destination": "Milan, Italy",
-        "origin": "New York",
-        "departure_date": "2025-12-03",
-        "arrival_date": "2025-12-17", 
-        "budget": total_budget,
-        "flight_budget": flight_cap,       # Max $600
-        "hotel_budget": hotel_total_cap,   # Max $1000
-        "interests": "Sunbathing, Culture",
-        "need_hotel": True,
-        "need_activities": True,
+        "destination": plan_data.get("destination", "Paris"), # Default dest if null
+        "origin": plan_data.get("origin", "New York"),
+        "departure_date": dept_date, # This is now guaranteed to be a string
+        "arrival_date": plan_data.get("arrival_date", "2025-12-10"),
+        "total_budget": total_budget,
+        "remaining_budget": total_budget,
+        "interests": plan_data.get("interests", "General"),
+        "need_hotel": plan_data.get("need_hotel", True),
+        "need_activities": plan_data.get("need_activities", True),
     }
-    print(f"Budget Breakdown -> Flights: ${flight_cap}, Hotel Total: ${hotel_total_cap}")
+    
+    print(f"Plan Generated: {extracted_plan['destination']} on {extracted_plan['departure_date']}")
     return {"plan": extracted_plan}
 
 def city_resolver_node(state: AgentState):
@@ -146,39 +172,72 @@ def city_resolver_node(state: AgentState):
     return {"origin_code": origin_code, "city_code": dest_code}
 
 def flight_node(state: AgentState):
-    """Step 2: Logistics (Flights)"""
     print("--- STEP 2: FLIGHT AGENT ---")
     plan = state["plan"]
-    search_flights = FlightSearchTool(amadeus_auth=amadeus_auth)
     
-    # Use the resolved codes from state
-    result = search_flights.invoke(
-        {
-            "origin": state["origin_code"],
-            "destination": state["city_code"],
-            "departure_date": plan["departure_date"],
-            "arrival_date": plan["arrival_date"],
-        }
-    )
-    print(f"Flight : {result}")
-    return {"flight_data": result}
+    # 1. Define a 'Max Price' for flights (e.g., 40% of total) to guide the search
+    max_flight_price = plan["total_budget"] * 0.40
+    
+    # 2. Call the tool (Assuming tool accepts a max_price param, or you filter later)
+    # If your Amadeus tool returns a JSON list of flights:
+    search_flights = FlightSearchTool(amadeus_auth=amadeus_auth)
+    flight_results = search_flights.invoke({
+        "origin": state["origin_code"],
+        "destination": state["city_code"],
+        "departure_date": plan["departure_date"],
+        "max_price": max_flight_price # OPTIONAL: If your tool supports this
+    })
+    
+    # 3. LOGIC: Extract the price of the "best" flight found
+    # Let's assume flight_results is a string or list. 
+    # You might need an LLM here to pick the best one and extract the price.
+    
+    extractor_prompt = f"""
+    Analyze these flight results: {flight_results}
+    1. Select the best flight under ${max_flight_price}.
+    2. Return ONLY the price as a number (e.g. 550.00).
+    """
+    price_response = llm.invoke(extractor_prompt).content
+    
+    # Clean up the string to get a float
+    try:
+        flight_cost = float(re.findall(r"[-+]?\d*\.\d+|\d+", price_response)[0])
+    except:
+        flight_cost = 0.0 # Fail safe
+        
+    print(f"Flight selected cost: ${flight_cost}")
+
+    # 4. UPDATE THE BUDGET
+    plan["remaining_budget"] = plan["remaining_budget"] - flight_cost
+    
+    return {"flight_data": flight_results, "plan": plan}
 
 
 def hotel_node(state: AgentState):
-    """Step 2b: Logistics (Hotels) - Conditional"""
     print("--- STEP 2b: HOTEL AGENT ---")
     plan = state["plan"]
-    city_code = state["city_code"]
+    
+    # 1. Calculate number of nights
+    d1 = datetime.strptime(plan["departure_date"], "%Y-%m-%d")
+    d2 = datetime.strptime(plan["arrival_date"], "%Y-%m-%d")
+    nights = abs((d2 - d1).days)
+    
+    # 2. Calculate max budget per night based on REMAINING funds
+    # We leave a 10% buffer for food/activities
+    available_for_hotel = plan["remaining_budget"] * 0.90
+    budget_per_night = available_for_hotel / max(1, nights)
+
+    print(f"Remaining funds: ${plan['remaining_budget']}")
+    print(f"Calculated max per night: ${budget_per_night}")
+
+    # 3. Search
     search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
-    result = search_hotels.invoke(
-        {
-            "city_code": city_code,
-            "budget": plan["budget"],
-            "check_in_date": plan["departure_date"],
-            "check_out_date": plan["arrival_date"],
-        }
-    )
-    print(f"Hotel Search Result: {result}")
+    result = search_hotels.invoke({
+        "city_code": state["city_code"],
+        "budget_per_night": budget_per_night, # Pass this to your tool
+        "check_in_date": plan["departure_date"],
+        "check_out_date": plan["arrival_date"],
+    })
 
     return {"hotel_data": result}
 
