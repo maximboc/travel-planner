@@ -10,7 +10,12 @@ import json
 import re
 from datetime import datetime
 
-from agent.utils.amadeus import AmadeusAuth, FlightSearchTool, HotelSearchTool, CitySearchTool
+from agent.utils.amadeus import (
+    AmadeusAuth,
+    FlightSearchTool,
+    HotelSearchTool,
+    CitySearchTool,
+)
 from agent.utils.tools import get_exchange_rate, get_weather, find_place_details
 
 # --- 2. DEFINE THE STATE ---
@@ -24,6 +29,7 @@ amadeus_auth = AmadeusAuth(
 
 class PlanDetails(TypedDict):
     """The structured output from the 'Brain'"""
+
     destination: str
     origin: str
     departure_date: str
@@ -76,8 +82,9 @@ def planner_node(state: AgentState):
         "need_hotel": true/false,
         "need_activities": true/false
     }
+    P.S. PLEASE DO NOT ADD ANY COMMENT TO THE JSON
     """
-    
+
     # 2. Invoke LLM
     response = llm.invoke([SystemMessage(content=system_msg)] + messages)
     content = response.content
@@ -88,19 +95,19 @@ def planner_node(state: AgentState):
             json_str = content.split("<json>")[1].split("</json>")[0]
         else:
             # Try to find the first { and last }
-            json_str = content[content.find("{"):content.rfind("}")+1]
-        
+            json_str = content[content.find("{") : content.rfind("}") + 1]
+
         plan_data = json.loads(json_str)
     except Exception as e:
         print(f"⚠️ JSON Parsing failed: {e}. Using raw defaults.")
         plan_data = {}
-    
+
     # 4. DATA SANITIZATION (The Fix for your Error)
     # We use .get() and provide a hard fallback if it returns None
-    
+
     # Default to 2 weeks from now if date is missing
-    default_date = "2025-12-03" 
-    
+    default_date = "2025-12-03"
+
     dept_date = plan_data.get("departure_date")
     if not dept_date:
         print(f"⚠️ Warning: 'departure_date' was None. Defaulting to {default_date}")
@@ -113,9 +120,9 @@ def planner_node(state: AgentState):
         total_budget = 2000.0
 
     extracted_plan = {
-        "destination": plan_data.get("destination", "Paris"), # Default dest if null
+        "destination": plan_data.get("destination", "Paris"),  # Default dest if null
         "origin": plan_data.get("origin", "New York"),
-        "departure_date": dept_date, # This is now guaranteed to be a string
+        "departure_date": dept_date,  # This is now guaranteed to be a string
         "arrival_date": plan_data.get("arrival_date", "2025-12-10"),
         "total_budget": total_budget,
         "remaining_budget": total_budget,
@@ -123,9 +130,12 @@ def planner_node(state: AgentState):
         "need_hotel": plan_data.get("need_hotel", True),
         "need_activities": plan_data.get("need_activities", True),
     }
-    
-    print(f"Plan Generated: {extracted_plan['destination']} on {extracted_plan['departure_date']}")
+
+    print(
+        f"Plan Generated: {extracted_plan['destination']} on {extracted_plan['departure_date']}"
+    )
     return {"plan": extracted_plan}
+
 
 def city_resolver_node(state: AgentState):
     """Step 1b: Resolve City Code for BOTH Origin and Destination"""
@@ -137,10 +147,10 @@ def city_resolver_node(state: AgentState):
     def resolve_iata(location_name):
         clean_name = location_name.split(",")[0].strip()
         print(f"Resolving code for: {clean_name}...")
-        
+
         # 1. Search API
         result_str = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
-        
+
         # 2. Ask LLM to extract
         resolver_prompt = f"""
         I am looking for the IATA city code for: {location_name}.
@@ -151,18 +161,18 @@ def city_resolver_node(state: AgentState):
         Return ONLY the 3-letter code (e.g. NYC). Nothing else.
         """
         code = llm.invoke(resolver_prompt).content.strip()
-        
+
         # 3. Fallback/Validation
         if len(code) != 3 or not code.isalpha():
             print(f"Warning: Could not resolve code for {clean_name}. Defaulting.")
-            return "NYC" if "New York" in location_name else "PAR" # Safe defaults
-            
+            return "NYC" if "New York" in location_name else "PAR"  # Safe defaults
+
         return code
 
     # --- Execution ---
     # Resolve Origin
     origin_code = resolve_iata(plan["origin"])
-    
+
     # Resolve Destination
     dest_code = resolve_iata(plan["destination"])
 
@@ -171,57 +181,60 @@ def city_resolver_node(state: AgentState):
     # Update state with both
     return {"origin_code": origin_code, "city_code": dest_code}
 
+
 def flight_node(state: AgentState):
     print("--- STEP 2: FLIGHT AGENT ---")
     plan = state["plan"]
-    
+
     # 1. Define a 'Max Price' for flights (e.g., 40% of total) to guide the search
     max_flight_price = plan["total_budget"] * 0.40
-    
+
     # 2. Call the tool (Assuming tool accepts a max_price param, or you filter later)
     # If your Amadeus tool returns a JSON list of flights:
     search_flights = FlightSearchTool(amadeus_auth=amadeus_auth)
-    flight_results = search_flights.invoke({
-        "origin": state["origin_code"],
-        "destination": state["city_code"],
-        "departure_date": plan["departure_date"],
-        "max_price": max_flight_price # OPTIONAL: If your tool supports this
-    })
-    
+    flight_results = search_flights.invoke(
+        {
+            "origin": state["origin_code"],
+            "destination": state["city_code"],
+            "departure_date": plan["departure_date"],
+            "max_price": max_flight_price,  # OPTIONAL: If your tool supports this
+        }
+    )
+
     # 3. LOGIC: Extract the price of the "best" flight found
-    # Let's assume flight_results is a string or list. 
+    # Let's assume flight_results is a string or list.
     # You might need an LLM here to pick the best one and extract the price.
-    
+
     extractor_prompt = f"""
     Analyze these flight results: {flight_results}
     1. Select the best flight under ${max_flight_price}.
     2. Return ONLY the price as a number (e.g. 550.00).
     """
     price_response = llm.invoke(extractor_prompt).content
-    
+
     # Clean up the string to get a float
     try:
         flight_cost = float(re.findall(r"[-+]?\d*\.\d+|\d+", price_response)[0])
     except:
-        flight_cost = 0.0 # Fail safe
-        
+        flight_cost = 0.0  # Fail safe
+
     print(f"Flight selected cost: ${flight_cost}")
 
     # 4. UPDATE THE BUDGET
     plan["remaining_budget"] = plan["remaining_budget"] - flight_cost
-    
+
     return {"flight_data": flight_results, "plan": plan}
 
 
 def hotel_node(state: AgentState):
     print("--- STEP 2b: HOTEL AGENT ---")
     plan = state["plan"]
-    
+
     # 1. Calculate number of nights
     d1 = datetime.strptime(plan["departure_date"], "%Y-%m-%d")
     d2 = datetime.strptime(plan["arrival_date"], "%Y-%m-%d")
     nights = abs((d2 - d1).days)
-    
+
     # 2. Calculate max budget per night based on REMAINING funds
     # We leave a 10% buffer for food/activities
     available_for_hotel = plan["remaining_budget"] * 0.90
@@ -232,12 +245,14 @@ def hotel_node(state: AgentState):
 
     # 3. Search
     search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
-    result = search_hotels.invoke({
-        "city_code": state["city_code"],
-        "budget_per_night": budget_per_night, # Pass this to your tool
-        "check_in_date": plan["departure_date"],
-        "check_out_date": plan["arrival_date"],
-    })
+    result = search_hotels.invoke(
+        {
+            "city_code": state["city_code"],
+            "budget_per_night": budget_per_night,  # Pass this to your tool
+            "check_in_date": plan["departure_date"],
+            "check_out_date": plan["arrival_date"],
+        }
+    )
 
     return {"hotel_data": result}
 
@@ -344,6 +359,7 @@ workflow.add_edge("city_resolver", "flight_agent")
 
 # --- CONDITIONAL PATHS (Using the clear v2 routers) ---
 
+
 # 3. After Flight, decide: Hotel, Activity, or Compile/END.
 def route_after_flight_v2(state: AgentState):
     if state["plan"]["need_hotel"]:
@@ -353,6 +369,7 @@ def route_after_flight_v2(state: AgentState):
         return "activity_agent"
     else:
         return "compiler"
+
 
 workflow.add_conditional_edges(
     "flight_agent",
@@ -364,12 +381,14 @@ workflow.add_conditional_edges(
     },
 )
 
+
 # 4. After Hotel, decide Activity or Compile/END.
 def route_after_hotel_v2(state: AgentState):
     if state["plan"]["need_activities"]:
         return "activity_agent"
     else:
         return "compiler"
+
 
 workflow.add_conditional_edges(
     "hotel_agent",
@@ -392,7 +411,7 @@ app = workflow.compile()
 
 
 def main():
-    user_input = "I want to go sunbathing in Nice from Dec 3 for 2 weeks. I need a hotel but I'll find my own activities."
+    user_input = "I am currently in Milano and I want to go sunbathing in Nice from Dec 3 for 2 weeks. I need a hotel but I'll find my own activities."
 
     print(f"User Input: {user_input}\n")
 
