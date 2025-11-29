@@ -7,7 +7,8 @@ FLIGHT_API_KEY=your_amadeus_api_key
 BOOKING_API_KEY=your_amadeus_api_key
 WEATHER_API_KEY=your_openweathermap_api_key
 GEOAPIFY_API_KEY=your_geoapify_api_key
-GEMINI_API_KEY=your_gemini_api_key
+LANGCHAIN_API_KEY=xxx
+
 ```
 
 ## API Key Sources

@@ -1,82 +1,8 @@
-from agent.agent import create_agent
-from agent.utils.monitoring import TokenUsageTracker
+from src.agent import create_agent
+from src.utils.monitoring import TokenUsageTracker
 from datetime import datetime
 import uuid
-import json
-
-
-def print_agent_execution(result, model_name):
-    """
-    Prints the execution trace, adapting to differences between
-    Gemini (silent tool calls) and Llama (chatty tool calls).
-    """
-    print("\n" + "=" * 60)
-    print(f"🕵️  AGENT EXECUTION LOG | Model: {model_name}")
-    print("=" * 60)
-
-    for msg in result["messages"]:
-        # 1. System Message
-        if msg.type == "system":
-            continue
-
-        # 2. User Message
-        if msg.type == "human":
-            print(f"\n👤 USER: {msg.content}")
-            print("-" * 40)
-
-        # 3. AI Message (Thoughts & Tool Calls)
-        elif msg.type == "ai":
-            # --- Handling Llama vs Gemini Differences ---
-
-            # Label the step
-            header = f"\n🤖 AI ({model_name})"
-
-            # CASE A: It is a Tool Call Step
-            if msg.tool_calls:
-                print(f"{header} - ACTION STEP")
-
-                # Llama 3.1 often puts "thoughts" in msg.content even during tool calls.
-                # Gemini usually leaves msg.content empty here.
-                # We print content if it exists to capture Llama's reasoning.
-                if msg.content and msg.content.strip():
-                    print(f"   💭 Reasoning: {msg.content.strip()}")
-
-                # Print the Tool details
-                print(f"   👉 Decided to call {len(msg.tool_calls)} tool(s):")
-                for tool in msg.tool_calls:
-                    print(f"      🛠️  Tool: {tool['name']}")
-                    # Pretty print the arguments
-                    try:
-                        args_str = json.dumps(tool["args"], ensure_ascii=False)
-                        print(f"          Args: {args_str}")
-                    except:
-                        print(f"          Args: {tool['args']}")
-
-            # CASE B: It is a Final Response (No tools)
-            elif msg.content:
-                print(f"{header} - FINAL RESPONSE")
-                print(f"{msg.content}")
-
-            # CASE C: Empty message (Rare, but happens with some local models)
-            else:
-                print(f"{header} - (Empty Message / Processing)")
-
-        # 4. Tool Output
-        elif msg.type == "tool":
-            status = "❌ ERROR" if "Error" in msg.content else "✅ SUCCESS"
-            # Clean up newlines for cleaner log if output is massive
-            clean_content = msg.content.strip()
-            # Truncate if massive (optional, good for RAG/HTML)
-            if len(clean_content) > 500:
-                display_content = clean_content[:500] + "... [truncated]"
-            else:
-                display_content = clean_content
-
-            print(f"\n{status} TOOL OUTPUT ({msg.name}):")
-            print(f"   {display_content}")
-
-    print("\n" + "=" * 60)
-
+from src.utils.utils import print_graph_execution
 
 def main():
     # Create the agent
@@ -164,13 +90,13 @@ def main():
     """
 
     # User input
-    user_input = "I am in Paris, and I want to go New York tomorrow and come back in a week: I need a hotel and a flight, and I like to visit museums :)"
-    # user_input = "I am in Marseille, suggest activities"
+    # user_input = "I am in Paris, and I want to go New York tomorrow and come back in a week: I need a hotel and a flight, and I like to visit museums :)"
+    user_input = "I am in Marseille, suggest activities"
 
     # Configuration for thread/session
     config = {
         "configurable": {"thread_id": "travel_session_1"},
-        "callbacks": [cost_tracker],  # <--- Inject the tracker here
+        "callbacks": [cost_tracker],
     }
 
     print("\n===== PROCESSING REQUEST =====")
@@ -180,7 +106,7 @@ def main():
         {"messages": [("system", system_prompt), ("user", user_input)]}, config=config
     )
 
-    print_agent_execution(result, model_name)
+    print_graph_execution(result)
     # Extract the final response
     print("\n===== AGENT RESPONSE =====")
     final_message = result["messages"][-1]
