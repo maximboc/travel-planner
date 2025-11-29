@@ -4,8 +4,10 @@
 To use the Travel Planner, you need to set up your API keys in a .env file at the root of the project:
 ```
 FLIGHT_API_KEY=your_amadeus_api_key
+BOOKING_API_KEY=your_amadeus_api_key
 WEATHER_API_KEY=your_openweathermap_api_key
 GEOAPIFY_API_KEY=your_geoapify_api_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ## API Key Sources

@@ -1,11 +1,12 @@
-from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from agent.utils.tools import (
-    get_weather,
     get_exchange_rate,
     find_place_details,
+    get_todays_date,
+    get_weather,
 )
+from agent.utils.gemini import get_gemini_model
 from agent.utils.amadeus import AmadeusAuth, FlightSearchTool, HotelSearchTool
 
 
@@ -13,7 +14,8 @@ def create_agent():
     """Create a ReAct agent for travel planning"""
 
     # Initialize LLM
-    llm = ChatOllama(model="llama3.1:8b")
+    # llm = ChatOllama(model="llama3.1:8b", temperature=0)
+    llm, model_name = get_gemini_model(temperature=0)
 
     amadeus_auth = AmadeusAuth(
         api_key="VQGubWZXZoGBV8eyUpPMPtNM9IG5AF20",  # os.getenv("AMADEUS_API_KEY", ""),
@@ -28,6 +30,7 @@ def create_agent():
         hotel_finder,
         get_exchange_rate,
         find_place_details,
+        get_todays_date,
         get_weather,
     ]
 
@@ -35,4 +38,4 @@ def create_agent():
 
     agent = create_react_agent(llm, tools, checkpointer=checkpointer)
 
-    return agent
+    return agent, model_name

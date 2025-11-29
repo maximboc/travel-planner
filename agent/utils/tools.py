@@ -1,6 +1,7 @@
 from langchain.tools import tool, ToolRuntime
 import requests
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,15 +17,20 @@ def convert_messages(runtime: ToolRuntime):
 
 
 @tool
+def get_todays_date() -> str:
+    """
+    Returns today's date in YYYY-MM-DD format.
+    """
+    print("Getting today's date...")
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+@tool
 def find_place_details(query: str) -> str:
     """
-    Searches for locations using OpenStreetMap.
-
-    IMPORTANT: This tool works best with specific categories + city names.
-    Examples of good queries:
-    - "Beaches in Nice, France"
-    - "Art Museums in Tokyo"
-    - "Eiffel Tower, Paris"
+    Searches for locations/activities using OpenStreetMap.
+    
+    IMPORTANT: This tool works only with the following specific categories : (Parks, Museums, Cinemas or Restaurants) + the city's name.
 
     Args:
         query: The search string. Combine the category and the city (e.g., 'Parks in London').
@@ -35,7 +41,7 @@ def find_place_details(query: str) -> str:
     try:
         headers = {"User-Agent": "LangChainTravelAgent/1.0"}  # Updated User-Agent
         url = "https://nominatim.openstreetmap.org/search"
-
+        
         params = {
             "q": query.strip(),
             "format": "jsonv2",
@@ -217,6 +223,6 @@ def get_weather(city: str) -> str:
 
 
 if __name__ == "__main__":
-    print(get_exchange_rate("USD", "EUR"))
+    print(get_todays_date())
     print("\n")
     # print(get_weather("Tokyo"))
