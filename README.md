@@ -3,12 +3,15 @@
 
 To use the Travel Planner, you need to set up your API keys in a .env file at the root of the project:
 ```
-FLIGHT_API_KEY=your_amadeus_api_key
-BOOKING_API_KEY=your_amadeus_api_key
+AMADEUS_API_KEY=your_amadeus_api_key
+AMADEUS_SECRET_KEY=your_amadeus_secret_key
 WEATHER_API_KEY=your_openweathermap_api_key
 GEOAPIFY_API_KEY=your_geoapify_api_key
-LANGCHAIN_API_KEY=xxx
-
+LANGCHAIN_API_KEY=your_langchain_api_key
+LANGCHAIN_PROJECT="travel-planner"
+LANGSMITH_TRACING="true"
+LANGCHAIN_TRACING_V2="true"
+LANGSMITH_ENDPOINT="https://eu.api.smith.langchain.com"
 ```
 
 ## API Key Sources
