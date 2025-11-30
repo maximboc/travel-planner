@@ -8,11 +8,11 @@ class AmadeusAuth:
     def __init__(self, api_key: str, api_secret: str):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.base_url = "https://test.api.amadeus.com"  # Use production URL in prod
+        self.base_url = "https://test.api.amadeus.com"
         self.access_token = None
         self.token_expires_at = None
 
-    def get_access_token(self) -> str:
+    def get_access_token(self) -> str | None:
         """Get or refresh access token"""
         if self.access_token and self.token_expires_at:
             if datetime.now().timestamp() < self.token_expires_at:

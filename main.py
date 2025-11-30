@@ -1,8 +1,6 @@
 import os
 import uuid
-import operator
 import functools
-from typing import Annotated, TypedDict, List, Optional
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage
@@ -14,7 +12,6 @@ from src.nodes import (
     activity_node,
     hotel_node,
     planner_node,
-    PlanDetails,
     city_resolver_node,
     flight_node,
     compiler_node,
@@ -23,13 +20,12 @@ from src.nodes import (
 )
 from src.tools import AmadeusAuth
 from src.utils import TokenUsageTracker, print_graph_execution
-
-# from langgraph.pregel import pregel_to_dot
+from src.states import AgentState, PlanDetailsState
 
 load_dotenv()
 
-AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY")
-AMADEUS_SECRET_KEY = os.getenv("AMADEUS_SECRET_KEY")
+AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY", "")
+AMADEUS_SECRET_KEY = os.getenv("AMADEUS_SECRET_KEY", "")
 
 amadeus_auth = AmadeusAuth(
     api_key=AMADEUS_API_KEY,
@@ -39,37 +35,22 @@ amadeus_auth = AmadeusAuth(
 llm = ChatOllama(model="llama3.1:8b", temperature=0)
 
 
-class AgentState(TypedDict):
-    """The Shared Memory of the Graph"""
-
-    messages: Annotated[List, operator.add]  # Chat history
-
-    # Structural Data
-    plan: Optional[PlanDetails]
-    city_code: Optional[str]
-    origin_code: Optional[str]
-
-    # gathered Data
-    flight_data: Optional[str]
-    hotel_data: Optional[str]
-    activity_data: Optional[str]
-
-    # Outputs & Reflexion
-    final_itinerary: Optional[str]
-    feedback: Optional[str]  # Critique from the Reviewer
-    revision_count: int  # To prevent infinite loops
-
-
 def route_after_flight(state: AgentState):
-    if state["plan"]["need_hotel"]:
+    plan: PlanDetailsState | None = state.plan
+    if not plan or not plan.need_hotel:
+        return "compiler"
+    if plan.need_hotel:
         return "hotel_agent"
-    if state["plan"]["need_activities"]:
+    if plan.need_activities:
         return "activity_agent"
     return "compiler"
 
 
 def route_after_hotel(state: AgentState):
-    if state["plan"]["need_activities"]:
+    plan: PlanDetailsState | None = state.plan
+    if not plan or not plan.need_activities:
+        return "compiler"
+    if plan.need_activities:
         return "activity_agent"
     return "compiler"
 
@@ -97,7 +78,6 @@ def main(app):
             {"messages": [HumanMessage(content=user_input)]}, config=config
         )
 
-        # Output Results
         print("\n\n===== ✨ FINAL AGENT RESPONSE ✨ =====")
         print(result["final_itinerary"])
 
@@ -108,6 +88,7 @@ def main(app):
         import traceback
 
         traceback.print_exc()
+
 
 """
 def test_evaluation(app):
@@ -137,8 +118,9 @@ if __name__ == "__main__":
     workflow.add_node(
         "hotel_agent", functools.partial(hotel_node, amadeus_auth=amadeus_auth)
     )
-    #workflow.add_node("activity_agent", functools.partial(activity_node, llm=llm))
-    workflow.add_node("activity_agent", functools.partial(activity_node, amadeus_auth=amadeus_auth))
+    workflow.add_node(
+        "activity_agent", functools.partial(activity_node, amadeus_auth=amadeus_auth)
+    )
     workflow.add_node("compiler", functools.partial(compiler_node, llm=llm))
     workflow.add_node("reviewer", functools.partial(reviewer_node, llm=llm))
     # Add Edges

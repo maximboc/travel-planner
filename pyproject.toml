@@ -1,0 +1,18 @@
+[project]
+name = "travel-planner"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "black>=25.11.0",
+    "dotenv>=0.9.9",
+    "langchain>=1.1.0",
+    "langchain-ollama>=1.0.0",
+    "langgraph>=1.0.4",
+    "langsmith>=0.4.49",
+    "mypy>=1.19.0",
+    "pydantic>=2.12.5",
+    "ruff>=0.14.7",
+    "types-requests>=2.32.4.20250913",
+]

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 import requests
-from typing import Type
+from typing import Dict, Type
 from .auth import AmadeusAuth
 from langchain.tools import BaseTool
 
@@ -33,20 +33,23 @@ class CitySearchTool(BaseTool):
     Input requires the city name as a keyword.
     """
     args_schema: Type[BaseModel] = CitySearchInput
-    amadeus_auth: AmadeusAuth = None
+    amadeus_auth: AmadeusAuth | None = None
 
-    def __init__(self, amadeus_auth: AmadeusAuth):
+    def __init__(self, amadeus_auth: AmadeusAuth | None = None):
         super().__init__()
         self.amadeus_auth = amadeus_auth
 
     def _run(self, keyword: str, subType: str = "CITY") -> CitySearchResult:
         """Search for city/location code"""
+        if not self.amadeus_auth:
+            raise ValueError("AmadeusAuth instance is required for city search.")
+
         try:
             token = self.amadeus_auth.get_access_token()
             url = f"{self.amadeus_auth.base_url}/v1/reference-data/locations"
 
-            headers = {"Authorization": f"Bearer {token}"}
-            params = {
+            headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
+            params: Dict[str, str | int] = {
                 "keyword": keyword.strip(),
                 "subType": subType.upper(),
                 "view": "FULL",
@@ -59,7 +62,7 @@ class CitySearchTool(BaseTool):
             data = response.json()
 
             if not data.get("data"):
-                return f"No Amadeus location code found for '{keyword}'."
+                raise ValueError(f"No location found for keyword: {keyword}")
 
             city_code = data["data"][0]["iataCode"]
 
@@ -67,10 +70,8 @@ class CitySearchTool(BaseTool):
 
             return CitySearchResult(name=name, iata_code=city_code)
 
-        except requests.exceptions.HTTPError as e:
-            return f"API Error in city search: {e.response.status_code} - {e.response.text}"
         except Exception as e:
-            return f"Error searching city code: {str(e)}"
+            raise e
 
     async def _arun(self, *args, **kwargs):
         """Async version - not implemented"""

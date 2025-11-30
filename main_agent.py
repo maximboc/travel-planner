@@ -4,6 +4,7 @@ from datetime import datetime
 import uuid
 from src.utils.utils import print_graph_execution
 
+
 def main():
     # Create the agent
     agent, model_name = create_agent()

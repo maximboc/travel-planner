@@ -1,4 +1,4 @@
-from typing import TypedDict, ClassVar
+from typing import TypedDict
 import os
 import requests
 from langsmith import traceable
@@ -12,6 +12,8 @@ class WeatherToolResult(TypedDict):
     country: str
     temp_c: float
     temp_f: float
+    feels_like_c: float
+    feels_like_f: float
     condition: str
     humidity: int
     wind_kph: float
@@ -19,15 +21,15 @@ class WeatherToolResult(TypedDict):
 
 
 class GetWeatherTool(BaseTool):
-    name: ClassVar[str] = "get_weather"
-    description: ClassVar[str] = (
+    name: str = "get_weather"
+    description: str = (
         "Get current weather information for a city. "
         "This tool helps travel agents provide weather information to users planning trips. "
         "It fetches real-time weather data from WeatherAPI.com."
     )
 
     @traceable(run_type="tool", name=name)
-    def _run(self, city: str) -> str:
+    def _run(self, city: str) -> WeatherToolResult:
         """
         Get current weather information for a city.
 
@@ -41,10 +43,7 @@ class GetWeatherTool(BaseTool):
             api_key = os.getenv("WEATHER_API_KEY")
 
             if not api_key:
-                return (
-                    "Error: WeatherAPI key not found. "
-                    "Please provide an API key or set the WEATHER_API_KEY environment variable."
-                )
+                raise ValueError("WEATHER_API_KEY environment variable is not set.")
 
             city = city.strip()
 
@@ -80,25 +79,15 @@ class GetWeatherTool(BaseTool):
             return result
 
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401 or e.response.status_code == 403:
-                return "Error: Invalid API key. Please check your WeatherAPI key."
-            elif e.response.status_code == 400:
-                try:
-                    error_data = e.response.json()
-                    error_msg = error_data.get("error", {}).get(
-                        "message", "Bad request"
-                    )
-                    return f"Error: {error_msg}"
-                except:
-                    return f"Error: City '{city}' not found or invalid request. Please check the spelling."
-            else:
-                return f"Error fetching weather data: HTTP {e.response.status_code}"
+            raise ValueError(f"HTTP error occurred: {str(e)}")
         except requests.exceptions.RequestException as e:
-            return f"Error: Unable to connect to weather service. {str(e)}"
+            raise ValueError(f"Error: Unable to connect to weather service. {str(e)}")
         except KeyError as e:
-            return f"Error: Unexpected response format from weather service. Missing key: {str(e)}"
+            raise ValueError(
+                f"Error: Unexpected response format from weather service. Missing key: {str(e)}"
+            )
         except Exception as e:
-            return f"Error getting weather: {str(e)}"
+            raise ValueError(f"Error getting weather: {str(e)}")
 
-    async def _arun(self, city: str) -> str:
+    async def _arun(self, city: str) -> WeatherToolResult:
         raise NotImplementedError("Async execution is not supported for this tool.")

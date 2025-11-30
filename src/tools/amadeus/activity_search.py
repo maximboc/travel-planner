@@ -1,8 +1,10 @@
 from pydantic import BaseModel, Field
 import requests
-from typing import Type
+from typing import Dict, List, Type
 from .auth import AmadeusAuth
 from langchain.tools import BaseTool
+
+from src.states import ActivityResultState
 
 
 class ActivitySearchInput(BaseModel):
@@ -24,17 +26,24 @@ class ActivitySearchTool(BaseTool):
     Input should be the city name (e.g. 'Paris').
     """
     args_schema: Type[BaseModel] = ActivitySearchInput
-    amadeus_auth: AmadeusAuth = None
+    amadeus_auth: AmadeusAuth | None = None
 
-    def __init__(self, amadeus_auth: AmadeusAuth):
+    def __init__(self, amadeus_auth: AmadeusAuth | None = None):
         super().__init__()
         self.amadeus_auth = amadeus_auth
 
     def _get_coordinates(self, token: str, keyword: str) -> tuple[float, float] | None:
         """Helper to convert city name to Lat/Lon"""
-        url = f"{self.amadeus_auth.base_url}/v1/reference-data/locations"
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {"keyword": keyword, "subType": "CITY", "page[limit]": 1}
+        if not self.amadeus_auth:
+            return None
+
+        url: str = f"{self.amadeus_auth.base_url}/v1/reference-data/locations"
+        headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
+        params: Dict[str, str | int] = {
+            "keyword": keyword,
+            "subType": "CITY",
+            "page[limit]": 1,
+        }
 
         try:
             response = requests.get(url, headers=headers, params=params)
@@ -52,14 +61,21 @@ class ActivitySearchTool(BaseTool):
             print(f"Error getting coordinates: {str(e)}")
             return None
 
-    def _run(self, location: str, radius: int = 5) -> str:
+    def _run(
+        self, location: str, radius: int = 5, max_places: int = 5
+    ) -> List[ActivityResultState]:
         """Search for activities"""
+        if not self.amadeus_auth:
+            raise ValueError("AmadeusAuth instance is required for activity search.")
         try:
             token = self.amadeus_auth.get_access_token()
 
-            coords = self._get_coordinates(token, location)
+            if token is None:
+                raise ValueError("Amadeus auth token is missing")
+
+            coords: tuple[float, float] | None = self._get_coordinates(token, location)
             if not coords:
-                return f"Could not find coordinates for location: {location}"
+                raise ValueError(f"Could not find coordinates for location: {location}")
 
             lat, lon = coords
 
@@ -72,12 +88,10 @@ class ActivitySearchTool(BaseTool):
             data = response.json()
 
             if not data.get("data"):
-                return f"No activities found in {location}."
+                raise ValueError(f"No activities found for location: {location}")
 
-            results = []
-            for item in data["data"][:5]:
-                name = item.get("name", "Unknown Activity")
-                booking_link = item.get("bookingLink", "N/A")
+            results: List[ActivityResultState] = []
+            for item in data["data"][:max_places]:
 
                 # Price formatting
                 price_data = item.get("price", {})
@@ -87,24 +101,25 @@ class ActivitySearchTool(BaseTool):
                     f"{amount} {currency}" if amount != "N/A" else "Price not available"
                 )
 
-                # Description parsing
-                short_desc = item.get("shortDescription", "No description")
-
-                # Format output
-                entry = (
-                    f"Activity: {name}\n"
-                    f"Price: {price_str}\n"
-                    f"Description: {short_desc}\n"
-                    f"Link: {booking_link}\n"
+                results.append(
+                    ActivityResultState(
+                        name=item.get("name", "Unnamed Activity"),
+                        price=price_str,
+                        booking_link=item.get("bookingLink", "No link available"),
+                        short_description=item.get(
+                            "shortDescription", "No description"
+                        ),
+                    )
                 )
-                results.append(entry)
 
-            return "\n---\n".join(results)
+            return results
 
         except requests.exceptions.HTTPError as e:
-            return f"Amadeus API Error: {e.response.status_code} - {e.response.text}"
+            print(f"HTTP Error: {str(e)}")
+            return []
         except Exception as e:
-            return f"Error searching activities: {str(e)}"
+            print(f"Error: {str(e)}")
+            return []
 
     async def _arun(self, *args, **kwargs):
         raise NotImplementedError("Async not supported yet")

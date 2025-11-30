@@ -1,60 +1,20 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 import requests
-from typing import Type
+from typing import Type, Dict
 from langchain.tools import BaseTool
 
 from .auth import AmadeusAuth
 
-
-class HotelContact(BaseModel):
-    phone: Optional[str]
-    fax: Optional[str]
-
-
-class HotelLocation(BaseModel):
-    city_code: str
-    latitude: Optional[float]
-    longitude: Optional[float]
-
-
-class PriceDetails(BaseModel):
-    total: str
-    currency: str
-    avg_nightly: Optional[str]
-    taxes: Optional[str]
-
-
-class RoomDetails(BaseModel):
-    room_type: str
-    beds: Optional[int]
-    bed_type: Optional[str]
-    description: str
-
-
-class OfferDetails(BaseModel):
-    offer_id: str
-    check_in: str
-    check_out: str
-    board_type: str
-    guests: int
-    price: PriceDetails
-    room: RoomDetails
-    cancellation_policy: Optional[str]
-    booking_link: Optional[str]
-
-
-class HotelDetails(BaseModel):
-    hotel_id: str
-    name: str
-    contact: Optional[HotelContact]
-    location: HotelLocation
-    offers: List[OfferDetails]
-
-
-class HotelSearchResult(BaseModel):
-    city_code: str
-    hotels: List[HotelDetails]
+from src.states import (
+    HotelSearchState,
+    HotelDetails,
+    HotelContact,
+    HotelLocation,
+    OfferDetails,
+    PriceDetails,
+    RoomDetails,
+)
 
 
 class HotelSearchInput(BaseModel):
@@ -86,19 +46,22 @@ class HotelSearchTool(BaseTool):
     Input requires city code, check-in date, and check-out date at minimum.
     """
     args_schema: Type[BaseModel] = HotelSearchInput
-    amadeus_auth: AmadeusAuth = None
+    amadeus_auth: AmadeusAuth | None = None
 
-    def __init__(self, amadeus_auth: AmadeusAuth):
+    def __init__(self, amadeus_auth: AmadeusAuth | None = None):
         super().__init__()
         self.amadeus_auth = amadeus_auth
 
     def _get_hotel_ids_by_city(
         self, token: str, city_code: str, radius: int = 5, max_hotels: int = 20
     ) -> List[str]:
+        """Helper to get hotel IDs in a city within a radius"""
+        if not self.amadeus_auth:
+            raise ValueError("AmadeusAuth instance is required for hotel search.")
         url = f"{self.amadeus_auth.base_url}/v1/reference-data/locations/hotels/by-city"
 
-        headers = {"Authorization": f"Bearer {token}"}
-        params = {
+        headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
+        params: Dict[str, str | int] = {
             "cityCode": city_code.upper(),
             "radius": radius,
             "radiusUnit": "KM",
@@ -125,13 +88,17 @@ class HotelSearchTool(BaseTool):
         room_quantity: int = 1,
         radius: int = 5,
         max_results: int = 5,
-    ) -> HotelSearchResult:
+    ) -> HotelSearchState:
         """Search for hotels"""
+        if not self.amadeus_auth:
+            raise ValueError("AmadeusAuth instance is required for hotel search.")
         try:
             token = self.amadeus_auth.get_access_token()
 
-            # Step 1: Get hotel IDs in the city
-            hotel_ids = self._get_hotel_ids_by_city(
+            if token is None:
+                raise ValueError("Amadeus auth token is missing")
+
+            hotel_ids: List[str] = self._get_hotel_ids_by_city(
                 token,
                 city_code,
                 radius,
@@ -139,13 +106,12 @@ class HotelSearchTool(BaseTool):
             )
 
             if not hotel_ids:
-                return HotelSearchResult(city_code=city_code, hotels=[])
+                return HotelSearchState(city_code=city_code, hotels=[])
 
-            # Step 2: Search for offers using hotel IDs
             url = f"{self.amadeus_auth.base_url}/v3/shopping/hotel-offers"
 
-            headers = {"Authorization": f"Bearer {token}"}
-            params = {
+            headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
+            params: Dict[str, Any] = {
                 "hotelIds": ",".join(hotel_ids),
                 "checkInDate": check_in_date,
                 "checkOutDate": check_out_date,
@@ -161,7 +127,7 @@ class HotelSearchTool(BaseTool):
             data = response.json()
 
             if not data.get("data"):
-                return HotelSearchResult(city_code=city_code, hotels=[])
+                return HotelSearchState(city_code=city_code, hotels=[])
 
             hotels = []
 
@@ -236,7 +202,7 @@ class HotelSearchTool(BaseTool):
 
                 hotels.append(hotel_details)
 
-            return HotelSearchResult(city_code=city_code, hotels=hotels)
+            return HotelSearchState(city_code=city_code, hotels=hotels)
 
         except requests.exceptions.HTTPError as e:
             raise Exception(f"API Error: {e.response.status_code} - {e.response.text}")

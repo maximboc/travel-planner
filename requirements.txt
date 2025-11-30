@@ -1,0 +1,12 @@
+langsmith
+langgraph
+langchain
+langchain-ollama
+pydantic
+requests
+python-dotenv
+amadeus
+typing_extensions
+pytest
+ruff
+black

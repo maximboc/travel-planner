@@ -1,12 +1,11 @@
 from .amadeus.auth import AmadeusAuth
 from .amadeus.flight_search import (
     FlightSearchInput,
-    FlightSearchResult,
-    create_flight_search_tool,
+    FlightSearchTool,
+    FlightSearchResultState,
 )
 from .amadeus.activity_search import ActivitySearchInput, ActivitySearchTool
 from .amadeus.city_search import CitySearchTool
-from .amadeus.place_detail import get_place_details
 from .amadeus.hotel_search import HotelSearchInput, HotelSearchTool
 from .date import get_todays_date
 from .weather import GetWeatherTool
@@ -17,10 +16,9 @@ __all__ = [
     "GetExchangeRateTool",
     "get_todays_date",
     "GetWeatherTool",
-    "get_place_details",
     "FlightSearchInput",
-    "create_flight_search_tool",
-    "FlightSearchResult",
+    "FlightSearchTool",
+    "FlightSearchResultState",
     "HotelSearchInput",
     "HotelSearchTool",
     "ActivitySearchInput",

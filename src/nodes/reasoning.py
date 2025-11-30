@@ -1,31 +1,18 @@
 from langgraph.graph import END
 from langchain_ollama import ChatOllama
-from typing import Annotated, List, Optional, TypedDict
-import operator
-from .planner import PlanDetails
 from langsmith import traceable
 
-
-class AgentState(TypedDict):
-    messages: Annotated[List, operator.add]  # Chat history
-
-    plan: Optional[PlanDetails]
-    city_code: Optional[str]
-    origin_code: Optional[str]
-
-    flight_data: Optional[str]
-    hotel_data: Optional[str]
-    activity_data: Optional[str]
-
-    final_itinerary: Optional[str]
-    feedback: Optional[str]
-    revision_count: int
+from src.states import AgentState, PlanDetailsState
 
 
 @traceable()
 def check_review_condition_node(state: AgentState):
-    feedback = state.get("feedback", "")
-    rev_count = state.get("revision_count", 0)
+    feedback = state.feedback
+    rev_count = state.revision_count
+
+    if not feedback:
+        print("   ✅ No feedback found. Finishing.")
+        return END
 
     if rev_count > 2:  # Max 2 revisions to save tokens
         print("   🛑 Max revisions reached. Accepting best effort.")
@@ -41,29 +28,32 @@ def check_review_condition_node(state: AgentState):
 
 @traceable
 def compiler_node(state: AgentState, llm: ChatOllama):
-    """Step 5: Compile Final Itinerary (Incorporating Tone & Reflexion)"""
     print("\n✍️  COMPILER: Drafting Itinerary...")
 
     # Handle Reflexion Feedback
     feedback_context = ""
-    if state.get("feedback") and "REJECT" in state["feedback"]:
-        print(f"   ⚠️ Addressing Critique: {state['feedback']}")
+    if state.feedback and "REJECT" in state.feedback:
+        print(f"   ⚠️ Addressing Critique: {state.feedback}")
         feedback_context = f"""
         CRITICAL: Your previous draft was REJECTED.
-        Reason: {state['feedback']}
+        Reason: {state.feedback.split('REJECT:')[1].strip()}
         YOU MUST FIX THIS IN THIS VERSION.
         """
 
+    if not state.plan:
+        print("   ⚠️ No plan found in state.")
+        return state
+
     # Context Construction
     context = f"""
-    Destination: {state['plan']['destination']}
-    Dates: {state['plan']['departure_date']} to {state['plan']['arrival_date']}
-    Remaining Budget: ${state['plan']['remaining_budget']}
-    
-    Flight Options: {state.get('flight_data')}
-    Hotel Options: {state.get('hotel_data', 'N/A')}
-    Activities: {state.get('activity_data', 'N/A')}
-    
+    Destination: {state.plan.destination}
+    Dates: {state.plan.departure_date} to {state.plan.arrival_date}
+    Remaining Budget: ${state.plan.remaining_budget}
+
+    Flight Options: {state.flight_data}
+    Hotel Options: {state.hotel_data}
+    Activities: {state.activity_data}
+
     {feedback_context}
     """
 
@@ -88,22 +78,25 @@ def compiler_node(state: AgentState, llm: ChatOllama):
 
 @traceable
 def reviewer_node(state: AgentState, llm: ChatOllama):
-    """Step 6: The Critic (Reflexion Loop)"""
     print("\n⚖️  REVIEWER: Quality Control Check...")
 
-    plan = state["plan"]
-    itinerary = state["final_itinerary"]
-    current_rev = state.get("revision_count", 0)
+    plan: PlanDetailsState | None = state.plan
+    if not plan:
+        print("   ⚠️ No plan found in state.")
+        return {"feedback": "APPROVE", "revision_count": 0}
+
+    itinerary = state.final_itinerary
+    current_rev = state.revision_count
 
     # Critique Prompt
     prompt = f"""
     You are a Strict Travel Quality Control Agent.
     
     PLAN CONSTRAINTS:
-    - Destination: {plan['destination']}
-    - Dates: {plan['departure_date']} to {plan['arrival_date']}
-    - Budget limit: ${plan['total_budget']}
-    
+    - Destination: {plan.destination}
+    - Dates: {plan.departure_date} to {plan.arrival_date}
+    - Budget limit: ${plan.total_budget}
+
     ITINERARY:
     {itinerary}
     
@@ -113,7 +106,10 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
     - If bad (wrong dates, wrong city, hallucinations): Reply "REJECT: [Reason]"
     """
 
-    response = llm.invoke(prompt).content.strip()
+    raw = llm.invoke(prompt).content
+    response_str = raw if isinstance(raw, str) else str(raw)
+    response = response_str.strip()
+
     print(f"   🧐 Verdict: {response}")
 
     return {"feedback": response, "revision_count": current_rev + 1}

@@ -20,11 +20,9 @@ class GetExchangeRateTool(BaseTool):
 
     def _run(self, from_currency: str, to_currency: str) -> ExchangeRateResult:
         try:
-            # Convert to uppercase to handle various input formats
             from_currency = from_currency.upper().strip()
             to_currency = to_currency.upper().strip()
 
-            # Use Frankfurter API - free, no API key required
             url = f"https://api.frankfurter.dev/v1/latest?base={from_currency}&symbols={to_currency}"
 
             response = requests.get(url, timeout=10)
@@ -32,9 +30,10 @@ class GetExchangeRateTool(BaseTool):
 
             data = response.json()
 
-            # Check if conversion was successful
             if "rates" not in data or to_currency not in data["rates"]:
-                return f"Error: Unable to convert from '{from_currency}' to '{to_currency}'. Please use valid ISO currency codes."
+                raise ValueError(
+                    f"Exchange rate data not available for {from_currency} to {to_currency}."
+                )
 
             rate = data["rates"][to_currency]
 
@@ -44,14 +43,8 @@ class GetExchangeRateTool(BaseTool):
                 to_currency=to_currency,
             )
 
-        except requests.exceptions.RequestException as e:
-            return f"Error fetching exchange rate: Unable to connect to exchange rate service. {str(e)}"
-        except KeyError:
-            return f"Error: Currency code '{from_currency}' not found. Please use valid ISO currency codes (e.g., USD, EUR, GBP, JPY)."
         except Exception as e:
-            return f"Error getting exchange rate: {str(e)}"
+            raise ValueError(f"Error fetching exchange rate: {str(e)}")
 
-        async def _arun(
-            self, from_currency: str, to_currency: str
-        ) -> ExchangeRateResult:
-            raise NotImplementedError("get_exchange_rate does not support async")
+    async def _arun(self, from_currency: str, to_currency: str) -> ExchangeRateResult:
+        raise NotImplementedError("get_exchange_rate does not support async")

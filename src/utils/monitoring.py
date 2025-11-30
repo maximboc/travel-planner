@@ -18,8 +18,8 @@ class TokenUsageTracker(BaseCallbackHandler):
         self.scenario_id = scenario_id
         self.model_name = model_name
         self.log_file = log_file
-        self.current_call_id = None
-        self.start_time = None
+        self.current_call_id: str = ""
+        self.start_time: float = 0.0
 
         # Initialize CSV with headers if it doesn't exist
         self._init_csv()
@@ -56,13 +56,13 @@ class TokenUsageTracker(BaseCallbackHandler):
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
         """Capture end time, calculate latency, and extract token usage."""
         end_time = time.time()
-        latency_ms = (end_time - self.start_time) * 1000
-        timestamp = datetime.now().isoformat()
+        latency_ms: float = (end_time - self.start_time) * 1000
+        timestamp: str = datetime.now().isoformat()
 
         # Extract token usage
-        prompt_tokens = 0
-        completion_tokens = 0
-        total_tokens = 0
+        prompt_tokens: int = 0
+        completion_tokens: int = 0
+        total_tokens: int = 0
 
         try:
             if response.generations and response.generations[0]:

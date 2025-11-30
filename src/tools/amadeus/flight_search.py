@@ -1,8 +1,10 @@
 import requests
-from typing import Optional, Type, List
+from typing import Any, Dict, Optional, List, Type
 from pydantic import BaseModel, Field
+from langchain.tools import BaseTool
+
 from .auth import AmadeusAuth
-from langchain.tools import tool
+from src.states import FlightSearchResultState, FlightItinerary, FlightSegment
 
 
 class FlightSearchInput(BaseModel):
@@ -26,35 +28,25 @@ class FlightSearchInput(BaseModel):
     )
 
 
-class FlightSegment(BaseModel):
-    """Represents a single flight segment in an itinerary"""
+class FlightSearchTool(BaseTool):
+    """Tool for searching flights using Amadeus Flight Search APIs"""
 
-    departure_airport: str
-    arrival_airport: str
-    departure_time: str
-    arrival_time: str
-    duration: str
-    airline: str
-    stops: int
+    name: str = "search_flights"
+    description: str = """
+    Search for available flights between two cities.
+    Use this tool when users want to find flights, compare prices, or plan air travel.
+    Returns flight details including prices, airlines, duration, and layover information.
+    Input requires origin, destination, departure date, and optionally return date.
+    """
+    args_schema: Type[BaseModel] = FlightSearchInput
+    amadeus_auth: AmadeusAuth | None = None
 
+    def __init__(self, amadeus_auth: AmadeusAuth | None = None):
+        super().__init__()
+        self.amadeus_auth = amadeus_auth
 
-class FlightItinerary(BaseModel):
-    """Represents an itinerary with multiple flight segments"""
-
-    segments: List[FlightSegment]
-
-
-class FlightSearchResult(BaseModel):
-    """Represents a single flight offer result"""
-
-    price: str
-    currency: str
-    itineraries: List[FlightItinerary]
-
-
-def create_flight_search_tool(amadeus_auth: AmadeusAuth):
-    @tool
-    def flight_search_tool(
+    def _run(
+        self,
         origin: str,
         destination: str,
         departure_date: str,
@@ -62,27 +54,17 @@ def create_flight_search_tool(amadeus_auth: AmadeusAuth):
         adults: int = 1,
         travel_class: str = "ECONOMY",
         max_results: int = 5,
-    ) -> List[dict]:
-        """
-        Search for available flight offers between two cities.
-        Use this tool when users want to find flights, compare prices, or plan air travel.
-        Returns flight details including prices, airlines, duration, and layover information.
-
-        Args:
-            origin: Origin airport IATA code (e.g., 'JFK', 'LAX')
-            destination: Destination airport IATA code (e.g., 'LHR', 'CDG')
-            departure_date: Departure date in YYYY-MM-DD format
-            return_date: Return date for round-trip in YYYY-MM-DD format (optional)
-            adults: Number of adult passengers (default: 1)
-            travel_class: Travel class: ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST
-            max_results: Maximum number of flight offers to return (default: 5)
-        """
+    ) -> List[FlightSearchResultState]:
+        """Search for flights"""
         try:
-            token = amadeus_auth.get_access_token()
-            url = f"{amadeus_auth.base_url}/v2/shopping/flight-offers"
+            if not self.amadeus_auth:
+                raise ValueError("AmadeusAuth instance is required for flight search.")
 
-            headers = {"Authorization": f"Bearer {token}"}
-            params = {
+            token = self.amadeus_auth.get_access_token()
+            url = f"{self.amadeus_auth.base_url}/v2/shopping/flight-offers"
+
+            headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
+            params: Dict[str, Any] = {
                 "originLocationCode": origin.upper(),
                 "destinationLocationCode": destination.upper(),
                 "departureDate": departure_date,
@@ -103,34 +85,34 @@ def create_flight_search_tool(amadeus_auth: AmadeusAuth):
                 return []
 
             # Parse results
-            results = []
+            results: List[FlightSearchResultState] = []
             for offer in data["data"][:max_results]:
                 price = offer["price"]["total"]
                 currency = offer["price"]["currency"]
 
-                itineraries = []
+                itineraries: List[FlightItinerary] = []
                 for itin in offer["itineraries"]:
-                    segments = []
+                    segments: List[FlightSegment] = []
                     for segment in itin["segments"]:
                         segments.append(
-                            {
-                                "departure_airport": segment["departure"]["iataCode"],
-                                "arrival_airport": segment["arrival"]["iataCode"],
-                                "departure_time": segment["departure"]["at"],
-                                "arrival_time": segment["arrival"]["at"],
-                                "duration": segment["duration"],
-                                "airline": segment["carrierCode"],
-                                "stops": len(itin["segments"]) - 1,
-                            }
+                            FlightSegment(
+                                departure_airport=segment["departure"]["iataCode"],
+                                arrival_airport=segment["arrival"]["iataCode"],
+                                departure_time=segment["departure"]["at"],
+                                arrival_time=segment["arrival"]["at"],
+                                duration=segment["duration"],
+                                airline=segment["carrierCode"],
+                                stops=len(itin["segments"]) - 1,
+                            )
                         )
-                    itineraries.append({"segments": segments})
+                    itineraries.append(FlightItinerary(segments=segments))
 
                 results.append(
-                    {
-                        "price": price,
-                        "currency": currency,
-                        "itineraries": itineraries,
-                    }
+                    FlightSearchResultState(
+                        price=price,
+                        currency=currency,
+                        itineraries=itineraries,
+                    )
                 )
 
             return results
@@ -139,5 +121,3 @@ def create_flight_search_tool(amadeus_auth: AmadeusAuth):
             raise ValueError(f"API Error: {e.response.status_code} - {e.response.text}")
         except Exception as e:
             raise ValueError(f"Error searching flights: {str(e)}")
-
-    return flight_search_tool
