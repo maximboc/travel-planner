@@ -5,7 +5,7 @@ from .amadeus.flight_search import (
     FlightSearchResultState,
 )
 from .amadeus.activity_search import ActivitySearchInput, ActivitySearchTool
-from .amadeus.city_search import CitySearchTool
+from .amadeus.city_search import CitySearchTool, CitySearchResult
 from .amadeus.hotel_search import HotelSearchInput, HotelSearchTool
 from .date import get_todays_date
 from .weather import GetWeatherTool
@@ -25,4 +25,5 @@ __all__ = [
     "ActivitySearchTool",
     "CitySearchInput",
     "CitySearchTool",
+    "CitySearchResult",
 ]
