@@ -1,4 +1,4 @@
-from .agent import AgentState
+from .agent import AgentState, TravelClass
 from .planner import PlanDetailsState
 from .hotel import (
     HotelSearchState,
@@ -14,6 +14,7 @@ from .activity import ActivityResultState
 
 __all__ = [
     "AgentState",
+    "TravelClass",
     "PlanDetailsState",
     "HotelSearchState",
     "FlightSearchResultState",
