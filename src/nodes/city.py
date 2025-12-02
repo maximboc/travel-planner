@@ -1,7 +1,7 @@
 from langchain_ollama import ChatOllama
+from langchain_core.messages import AIMessage
 from langsmith import traceable
-
-from src.tools import CitySearchTool, AmadeusAuth
+from src.tools import CitySearchTool, AmadeusAuth, CitySearchResult
 from src.states import AgentState, PlanDetailsState
 
 
@@ -13,33 +13,66 @@ def city_resolver_node(
     plan: PlanDetailsState | None = state.plan
     city_search = CitySearchTool(amadeus_auth=amadeus_auth)
 
-    if not plan:
-        print("   ⚠️ No plan found in state.")
+    if state.needs_user_input:
+        print("   ⚠️ Awaiting user input, skipping city resolution.")
         return state
 
-    def resolve_iata(location_name: str) -> str:
-        clean_name = location_name.split(",")[0].strip()
-        result_str = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
+    if not plan:
+        print("   ⚠️ No plan found in state.")
+        question = "I don't have your travel plan yet. Could you tell me where you'd like to go?"
 
-        raw = llm.invoke(
-            f"Extract the 3-letter IATA code for '{location_name}' from: {result_str}. Return ONLY the code."
-        ).content
+        state.needs_user_input = True
+        state.validation_question = question
+        state.messages.append(AIMessage(content=question))
 
-        code_str = raw if isinstance(raw, str) else str(raw)
-        code = code_str.strip()
+        return state
 
-        if len(code) != 3 or not code.isalpha():
-            return "NYC" if "New York" in location_name else "PAR"
-        return code
+    def resolve_iata(location_name: str, location_type: str) -> tuple[str, bool]:
+        """
+        Returns (code, success)
+        """
+        try:
+            clean_name = location_name.split(",")[0].strip()
+            result: CitySearchResult = city_search.invoke(
+                {"keyword": clean_name, "subType": "CITY"}
+            )
+            return result.iata_code, True
 
-    origin_code = resolve_iata(plan.origin)
-    dest_code = resolve_iata(plan.destination)
+        except Exception as e:
+            print(f"   ⚠️ Error resolving {location_type}: {e}")
+            return "", False
+
+    origin_code, origin_success = resolve_iata(plan.origin, "origin")
+
+    if not origin_success:
+        question = f"I couldn't find the airport code for '{plan.origin}'. Could you provide a clearer city name or airport code for your departure location?"
+
+        state.needs_user_input = True
+        state.validation_question = question
+        state.messages.append(AIMessage(content=question))
+
+        print(f"   ❓ {question}")
+        return state
+
+    dest_code, dest_success = resolve_iata(plan.destination, "destination")
+
+    if not dest_success:
+        question = f"I couldn't find the airport code for '{plan.destination}'. Could you provide a clearer city name or airport code for your destination?"
+
+        state.needs_user_input = True
+        state.validation_question = question
+        state.messages.append(AIMessage(content=question))
+
+        print(f"   ❓ {question}")
+        return state
 
     plan.origin = origin_code
     plan.destination = dest_code
     state.city_code = dest_code
     state.origin_code = origin_code
-
     state.plan = plan
+    state.needs_user_input = False
+    state.validation_question = None
+
     print(f"   ✅ Route: {origin_code} -> {dest_code}")
     return state

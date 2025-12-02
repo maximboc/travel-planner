@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import InMemorySaver
 
 # from tests.judge import run_batch_evaluation, create_judge_agent
 
@@ -17,6 +18,7 @@ from src.nodes import (
     compiler_node,
     reviewer_node,
     check_review_condition_node,
+    passenger_node,
 )
 from src.tools import AmadeusAuth
 from src.utils import TokenUsageTracker, print_graph_execution
@@ -37,6 +39,8 @@ llm = ChatOllama(model="llama3.1:8b", temperature=0)
 
 def route_after_flight(state: AgentState):
     plan: PlanDetailsState | None = state.plan
+    if state.needs_user_input:
+        return "compiler"
     if not plan or not plan.need_hotel:
         return "compiler"
     if plan.need_hotel:
@@ -48,6 +52,8 @@ def route_after_flight(state: AgentState):
 
 def route_after_hotel(state: AgentState):
     plan: PlanDetailsState | None = state.plan
+    if state.needs_user_input:
+        return "compiler"
     if not plan or not plan.need_activities:
         return "compiler"
     if plan.need_activities:
@@ -56,50 +62,74 @@ def route_after_hotel(state: AgentState):
 
 
 def main(app):
-
     scenario_id = str(uuid.uuid4())
+    thread_id = f"session_{scenario_id}"
+    state = AgentState()
     print(f"📋 Scenario ID: {scenario_id}")
 
-    # if input("Generate graph visualization? (y/n): ") == "y":
-    #     dot_src = pregel_to_dot(app)
-    #     with open("graph.dot", "w") as f:
-    #         f.write(dot_src)
-    #     print("Graph visualization saved to graph.dot")
-
     cost_tracker = TokenUsageTracker(scenario_id=scenario_id, model_name="llama3.1:8b")
-    config = {"configurable": {"thread_id": "session_1"}, "callbacks": [cost_tracker]}
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "callbacks": [cost_tracker],
+    }
 
-    user_input = "I am in Paris, and I want to go New York tomorrow and come back in a week: I need a hotel and a flight, find activities as well :)"
-    print(f"\n👤 USER: {user_input}")
-    print("\n===== STARTING AGENT WORKFLOW =====")
+    print("\n🤖 Travel Agent: Hello! I'm here to help plan your trip.")
+    print("    Type 'quit' to exit, 'restart' to start over.\n")
 
-    try:
-        result = app.invoke(
-            {"messages": [HumanMessage(content=user_input)]}, config=config
-        )
+    conversation_active = True
 
-        print("\n\n===== ✨ FINAL AGENT RESPONSE ✨ =====")
-        print(result["final_itinerary"])
+    while conversation_active:
+        user_input = input("\n👤 You: ").strip()
 
-        print_graph_execution(result)
+        if user_input.lower() == "quit":
+            print("\n👋 Thanks for using the travel planner!")
+            break
 
-    except Exception as e:
-        print(f"\n❌ EXECUTION ERROR: {e}")
-        import traceback
+        if user_input.lower() == "restart":
+            scenario_id = str(uuid.uuid4())
+            thread_id = f"session_{scenario_id}"
+            config["configurable"]["thread_id"] = thread_id
+            state = AgentState()
+            print("\n🔄 Starting a new conversation...")
+            continue
 
-        traceback.print_exc()
+        if not user_input:
+            continue
 
+        try:
+            state.messages.append(HumanMessage(content=user_input))
+            result = app.invoke(
+                state,
+                config=config,
+            )
 
-"""
-def test_evaluation(app):
-    judge_llm, _ = create_judge_agent()
-    results = run_batch_evaluation(
-        judged_llm=app,
-        judged_llm_name="llama3.1:8b",
-        judge_llm=judge_llm,
-    )
-    print("Evaluation Results:", results)
-"""
+            if result.get("needs_user_input", False):
+                print(f"\n🤖 Agent: {result['validation_question']}")
+                continue
+
+            if result.get("final_itinerary"):
+                print("\n\n===== ✨ YOUR TRAVEL ITINERARY ✨ =====")
+                print(result["final_itinerary"])
+                print("\n✅ Planning complete!")
+
+                if (
+                    input("\nWould you like to plan another trip? (y/n): ").lower()
+                    == "y"
+                ):
+                    scenario_id = str(uuid.uuid4())
+                    thread_id = f"session_{scenario_id}"
+                    config["configurable"]["thread_id"] = thread_id
+                    print("\n🔄 Starting a new conversation...")
+                else:
+                    conversation_active = False
+
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    print_graph_execution()
 
 
 if __name__ == "__main__":
@@ -112,21 +142,27 @@ if __name__ == "__main__":
         functools.partial(city_resolver_node, llm=llm, amadeus_auth=amadeus_auth),
     )
     workflow.add_node(
+        "passenger_agent",
+        functools.partial(passenger_node, llm=llm),
+    )
+    workflow.add_node(
         "flight_agent",
         functools.partial(flight_node, llm=llm, amadeus_auth=amadeus_auth),
     )
     workflow.add_node(
-        "hotel_agent", functools.partial(hotel_node, amadeus_auth=amadeus_auth)
+        "hotel_agent", functools.partial(hotel_node, amadeus_auth=amadeus_auth, llm=llm)
     )
     workflow.add_node(
         "activity_agent", functools.partial(activity_node, amadeus_auth=amadeus_auth)
     )
     workflow.add_node("compiler", functools.partial(compiler_node, llm=llm))
     workflow.add_node("reviewer", functools.partial(reviewer_node, llm=llm))
+
     # Add Edges
     workflow.add_edge(START, "planner")
     workflow.add_edge("planner", "city_resolver")
-    workflow.add_edge("city_resolver", "flight_agent")
+    workflow.add_edge("city_resolver", "passenger_agent")
+    workflow.add_edge("passenger_agent", "flight_agent")
 
     workflow.add_conditional_edges(
         "flight_agent",
@@ -152,7 +188,8 @@ if __name__ == "__main__":
         "reviewer", check_review_condition_node, {"compiler": "compiler", END: END}
     )
 
-    app = workflow.compile()
+    memory = InMemorySaver()
+    app = workflow.compile(checkpointer=memory)
 
     # test_evaluation(app)
     main(app)

@@ -14,7 +14,7 @@ def print_graph_execution(final_state: AgentState):
 
     print(f"📍 Destination: {plan.destination} ({final_state.city_code})")
     print(f"📅 Dates: {plan.departure_date} -> {plan.arrival_date}")
-    print(f"💰 Budget: ${plan.total_budget} (Remaining: ${plan.remaining_budget})")
+    print(f"💰 Budget: ${plan.budget} (Remaining: ${plan.remaining_budget})")
 
     print("-" * 30)
     print("🛠️  DATA GATHERED:")
