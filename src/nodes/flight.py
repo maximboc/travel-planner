@@ -4,6 +4,8 @@ import json
 from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
+from langgraph.types import Command
+
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
 from src.tools import FlightSearchTool, AmadeusAuth
 
@@ -25,22 +27,11 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         )
         return state
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping flight search.")
+    if state.needs_user_input or not state.plan:
+        print("No plan found or awaiting user input, cannot search flights.")
         return state
 
-    plan: PlanDetailsState | None = state.plan
-
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I need your travel details to search for flights. Where are you going and when?"
-
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
-
-        return state
-
+    plan: PlanDetailsState = state.plan
     try:
         flight_search_tool = FlightSearchTool(amadeus_auth)
         flight_results: List[FlightSearchResultState] = flight_search_tool.invoke(
@@ -62,7 +53,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
 
-        return state
+        return Command(goto="compiler", update=state)
 
     if not flight_results:
         print("   ⚠️ No flights found.")
@@ -72,7 +63,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
 
-        return state
+        return Command(goto="compiler", update=state)
 
     flight_results_json = json.dumps(
         [r.model_dump() for r in flight_results],
@@ -126,7 +117,7 @@ Return the indices of the top 3 flights as JSON:
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
 
-        return state
+        return Command(goto="compiler", update=state)
 
     top_flights_json = json.dumps(
         [r.model_dump() for r in top_flights],

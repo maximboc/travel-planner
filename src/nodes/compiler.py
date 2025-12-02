@@ -16,12 +16,8 @@ def compiler_node(state: AgentState, llm: ChatOllama):
         YOU MUST FIX THIS IN THIS VERSION.
         """
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping itinerary compilation.")
-        return state
-
-    if not state.plan:
-        print("   ⚠️ No plan found in state.")
+    if state.needs_user_input or not state.plan:
+        print("   ❓ Awaiting user input, cannot compile itinerary.")
         return state
 
     # Context Construction

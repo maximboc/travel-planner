@@ -4,6 +4,8 @@ from datetime import datetime
 import json
 from langchain_ollama import ChatOllama
 
+from langgraph.types import Command
+
 from src.tools import HotelSearchTool, AmadeusAuth
 from src.states import AgentState, PlanDetailsState
 
@@ -12,21 +14,12 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     print("\n🏨 HOTEL AGENT: Searching...")
     plan: PlanDetailsState | None = state.plan
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping hotel search.")
-        return state
-
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I need your travel details to search for hotels. Where and when are you traveling?"
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
+    if not plan or state.needs_user_input:
+        print("No plan found or awaiting user input, cannot search hotels.")
         return state
 
     if not plan.need_hotel:
         print("   ℹ️  Hotel not requested, skipping...")
-        state.needs_user_input = False
         state.hotel_data = None
         return state
 
@@ -35,14 +28,14 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-        return state
+        return Command(goto="compiler", update=state)
 
     if not plan.departure_date or not plan.arrival_date:
         question = "I need your check-in and check-out dates to search for hotels. When will you be staying?"
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-        return state
+        return Command(goto="compiler", update=state)
 
     if state.hotel_data is None:
         try:
@@ -69,6 +62,7 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
             state.needs_user_input = True
             state.validation_question = question
             state.messages.append(AIMessage(content=question))
+            return Command(goto="compiler", update=state)
     else:
         print("   ℹ️  Hotel data found, proceeding with analysis...")
 

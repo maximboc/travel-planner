@@ -9,9 +9,8 @@ from src.states import AgentState, ActivityResultState, PlanDetailsState
 def activity_node(state: AgentState, amadeus_auth: AmadeusAuth):
     print("\n🎨 ACTIVITY AGENT: Searching...")
     plan: PlanDetailsState | None = state.plan
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        return state
+    if not plan or state.needs_user_input:
+        raise ValueError("No plan found or awaiting user input, cannot search activities.")
 
     activity_finder = ActivitySearchTool(amadeus_auth=amadeus_auth)
 

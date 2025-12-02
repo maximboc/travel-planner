@@ -32,11 +32,13 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
     plan: PlanDetailsState | None = state.plan
     if not plan:
         print("   ⚠️ No plan found in state.")
-        return {"feedback": "DECLINED", "revision_count": 0}
+        state.feedback = "DECLINED"
+        return state
 
     if state.needs_user_input:
         print("   ⚠️ Awaiting user input, skipping review.")
-        return {"feedback": "DECLINED", "revision_count": state.revision_count}
+        state.feedback = "DECLINED"
+        return state
 
     itinerary = state.final_itinerary
     current_rev = state.revision_count
@@ -65,4 +67,6 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
 
     print(f"   🧐 Verdict: {response}")
 
-    return {"feedback": response, "revision_count": current_rev + 1}
+    state.feedback = response
+    state.revision_count = current_rev + 1
+    return state

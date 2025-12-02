@@ -4,22 +4,9 @@ import json
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, AIMessage
 from langsmith import traceable
+from langgraph.types import Command
 
 from src.states import AgentState, PlanDetailsState
-
-
-def planner_missing(state: AgentState, missing_fields: list[str]):
-    if missing_fields:
-        missing_str = ", ".join(missing_fields)
-        question = f"I need a bit more information to plan your trip. Could you please provide: {missing_str}?"
-    else:
-        question = "I want to make sure I understand your travel plans correctly. Could you clarify your destination, dates, and where you're traveling from?"
-
-    state.needs_user_input = True
-    state.validation_question = question
-    state.messages.append(AIMessage(content=question))
-    print(f"   ❓ {question}")
-
 
 def planner_skipped(state: AgentState) -> bool:
     return (
@@ -39,8 +26,6 @@ def planner_node(state: AgentState, llm: ChatOllama):
     if planner_skipped(state):
         print("   ℹ️  Plan already exists and no user input needed, skipping planning.")
         return state
-
-    print(state)
 
     messages = state.messages
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -112,7 +97,7 @@ Return ONLY the JSON object.
         state.messages.append(AIMessage(content=question))
 
         print(f"   ❓ {question}")
-        return state
+        return Command(goto="compiler", update=state)
 
     confidence = plan_data.get("confidence", "medium")
     missing_fields = []
@@ -145,8 +130,17 @@ Return ONLY the JSON object.
     state.plan = plan
 
     if missing_fields or confidence == "low":
-        planner_missing(state, missing_fields)
-        return state
+        if missing_fields:
+            missing_str = ", ".join(missing_fields)
+            question = f"I need a bit more information to plan your trip. Could you please provide: {missing_str}?"
+        else:
+            question = "I want to make sure I understand your travel plans correctly. Could you clarify your destination, dates, and where you're traveling from?"
+
+        state.needs_user_input = True
+        state.validation_question = question
+        state.messages.append(AIMessage(content=question))
+        print(f"   ❓ {question}")
+        return Command(goto="compiler", update=state)
 
     print(
         f"   📝 Plan: {plan.destination} ({plan.departure_date} to {plan.arrival_date})"

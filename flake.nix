@@ -27,6 +27,7 @@
               python
               pkgs.uv
               pkgs.zlib
+              pkgs.vite
             ];
             profile = ''
               export UV_PYTHON=${python}

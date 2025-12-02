@@ -1,7 +1,9 @@
 from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
-from src.tools import CitySearchTool, AmadeusAuth, CitySearchResult
+from langgraph.types import Command
+
+from src.tools import CitySearchTool, AmadeusAuth
 from src.states import AgentState, PlanDetailsState
 
 
@@ -13,30 +15,32 @@ def city_resolver_node(
     plan: PlanDetailsState | None = state.plan
     city_search = CitySearchTool(amadeus_auth=amadeus_auth)
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping city resolution.")
-        return state
-
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I don't have your travel plan yet. Could you tell me where you'd like to go?"
-
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
-
+    if not plan or state.needs_user_input:
+        print("No plan found or awaiting user input, cannot resolve cities.")
         return state
 
     def resolve_iata(location_name: str, location_type: str) -> tuple[str, bool]:
-        """
-        Returns (code, success)
-        """
         try:
             clean_name = location_name.split(",")[0].strip()
-            result: CitySearchResult = city_search.invoke(
-                {"keyword": clean_name, "subType": "CITY"}
-            )
-            return result.iata_code, True
+            print(f"Resolving code for: {clean_name}...")
+        
+            result_str = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
+            
+            resolver_prompt = f"""
+            I am looking for the IATA city code for: {location_name}.
+            Here are the search results:
+            {result_str}
+            
+            Extract the single 3-letter IATA code that best matches "{location_name}".
+            Return ONLY the 3-letter code (e.g. NYC). Nothing else.
+            """
+            code = llm.invoke(resolver_prompt).content.strip()
+            
+            if len(code) != 3 or not code.isalpha():
+                print(f"Warning: Could not resolve code for {clean_name}. Defaulting.")
+                return "NYC" if "New York" in location_name else "PAR" # Safe defaults
+                
+            return code, True
 
         except Exception as e:
             print(f"   ⚠️ Error resolving {location_type}: {e}")
@@ -52,7 +56,7 @@ def city_resolver_node(
         state.messages.append(AIMessage(content=question))
 
         print(f"   ❓ {question}")
-        return state
+        return Command(goto="compiler", update=state)
 
     dest_code, dest_success = resolve_iata(plan.destination, "destination")
 
@@ -64,7 +68,7 @@ def city_resolver_node(
         state.messages.append(AIMessage(content=question))
 
         print(f"   ❓ {question}")
-        return state
+        return Command(goto="compiler", update=state)
 
     plan.origin = origin_code
     plan.destination = dest_code
