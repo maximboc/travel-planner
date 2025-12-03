@@ -1,11 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, RotateCcw, Plane, Calendar, DollarSign, MapPin, Hotel, Compass, Sun, Users, CheckCircle2, Loader2 } from 'lucide-react';
+import { 
+  Send, RotateCcw, Plane, Calendar, DollarSign, MapPin, 
+  Hotel, Compass, Sun, Users, CheckCircle2, Loader2, 
+  PanelRight, PanelRightClose 
+} from 'lucide-react';
 
 export default function TravelPlannerApp() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(`session_${Date.now()}`);
+  
+  // NEW: State to toggle sidebar
+  const [showDetails, setShowDetails] = useState(false); 
+
   const [agentState, setAgentState] = useState({
     plan: null,
     adults: null,
@@ -43,13 +51,9 @@ export default function TravelPlannerApp() {
       activity_data: null,
       current_node: null
     });
-    // Generate a fresh session ID
     const newId = `session_${Date.now()}`;
-    // Because sessionId is const in your code, convert it to state with setter:
-    // const [sessionId, setSessionId] = useState(`session_${Date.now()}`);
     setSessionId(newId);
   };
-
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -186,24 +190,49 @@ export default function TravelPlannerApp() {
                 <p className="text-sm text-gray-600">Your intelligent travel companion</p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <div className="px-4 py-2 rounded-lg bg-white border border-purple-200 text-sm font-medium text-purple-700 flex items-center gap-2">
+            
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex px-4 py-2 rounded-lg bg-white border border-purple-200 text-sm font-medium text-purple-700 items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                 Online
               </div>
+              
+              {/* TOGGLE BUTTON */}
+              <button 
+                onClick={() => setShowDetails(!showDetails)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  showDetails 
+                    ? 'bg-purple-100 text-purple-700 border border-purple-200' 
+                    : 'bg-white text-gray-600 border border-gray-200 hover:border-purple-300'
+                }`}
+              >
+                {showDetails ? (
+                  <>
+                    <PanelRightClose className="w-4 h-4" />
+                    <span className="hidden sm:inline">Hide Details</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelRight className="w-4 h-4" />
+                    <span className="hidden sm:inline">Show Plan Details</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* LAYOUT LOGIC */}
+        <div className={`grid grid-cols-1 ${showDetails ? 'lg:grid-cols-3' : ''} gap-6`}>
+          
           {/* Main Chat Area */}
-          <div className="lg:col-span-2">
+          <div className={showDetails ? 'lg:col-span-2' : 'w-full'}>
             {messages.length === 0 && (
               <div className="mb-8">
                 <h2 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h2>
-                <div className="grid grid-cols-2 gap-4">
+                <div className={`grid gap-4 ${showDetails ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
                   {quickActions.map((action, idx) => (
                     <button
                       key={idx}
@@ -320,110 +349,114 @@ export default function TravelPlannerApp() {
             </div>
           </div>
 
-          {/* State Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg border border-purple-100 p-6 sticky top-24">
-              <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-purple-600" />
-                Trip Details
-              </h2>
-
-              {!hasState ? (
-                <p className="text-sm text-gray-500 italic">Details will appear as you chat...</p>
-              ) : (
-                <div className="space-y-4">
-                  {plan && (
-                    <>
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <MapPin className="w-5 h-5 text-blue-600" />
-                          <span className="text-xs font-semibold text-blue-900 uppercase">Destination</span>
-                        </div>
-                        <p className="font-bold text-gray-800">{plan.destination || '---'}</p>
-                        {agentState.city_code && (
-                          <p className="text-xs text-gray-600 mt-1">Code: {agentState.city_code}</p>
-                        )}
-                      </div>
-
-                      <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Calendar className="w-5 h-5 text-purple-600" />
-                          <span className="text-xs font-semibold text-purple-900 uppercase">Dates</span>
-                        </div>
-                        <p className="text-sm font-medium text-gray-800">
-                          {plan.departure_date ? `${plan.departure_date}` : '---'}
-                        </p>
-                        {plan.arrival_date && (
-                          <p className="text-sm font-medium text-gray-800 mt-1">to {plan.arrival_date}</p>
-                        )}
-                      </div>
-
-                      <div className="bg-pink-50 p-4 rounded-xl border border-pink-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <DollarSign className="w-5 h-5 text-pink-600" />
-                          <span className="text-xs font-semibold text-pink-900 uppercase">Budget</span>
-                        </div>
-                        <p className="font-bold text-gray-800">${plan.budget || 0}</p>
-                      </div>
-                    </>
-                  )}
-
-                  {(agentState.adults || agentState.children || agentState.infants) && (
-                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Users className="w-5 h-5 text-orange-600" />
-                        <span className="text-xs font-semibold text-orange-900 uppercase">Passengers</span>
-                      </div>
-                      <div className="space-y-1 text-sm text-gray-700">
-                        {agentState.adults && <p>Adults: {agentState.adults}</p>}
-                        {agentState.children > 0 && <p>Children: {agentState.children}</p>}
-                        {agentState.infants > 0 && <p>Infants: {agentState.infants}</p>}
-                        {agentState.travel_class && (
-                          <p className="text-xs text-gray-600 mt-2">Class: {agentState.travel_class}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {agentState.flight_data && agentState.flight_data.length > 0 && (
-                    <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Plane className="w-5 h-5 text-cyan-600" />
-                        <span className="text-xs font-semibold text-cyan-900 uppercase">Flights Found</span>
-                      </div>
-                      <p className="font-bold text-gray-800">{agentState.flight_data.length} options</p>
-                      {agentState.selected_flight_index !== null && (
-                        <p className="text-xs text-gray-600 mt-1">Selected: Option {agentState.selected_flight_index + 1}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {agentState.hotel_data && agentState.hotel_data.hotels && agentState.hotel_data.hotels.length > 0 && (
-                    <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Hotel className="w-5 h-5 text-emerald-600" />
-                        <span className="text-xs font-semibold text-emerald-900 uppercase">Hotels Found</span>
-                      </div>
-                      <p className="font-bold text-gray-800">{agentState.hotel_data.hotels.length} options</p>
-                      {agentState.selected_hotel_index !== null && (
-                        <p className="text-xs text-gray-600 mt-1">Selected: Option {agentState.selected_hotel_index + 1}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {agentState.activity_data && agentState.activity_data.length > 0 && (
-                    <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Compass className="w-5 h-5 text-yellow-600" />
-                        <span className="text-xs font-semibold text-yellow-900 uppercase">Activities</span>
-                      </div>
-                      <p className="font-bold text-gray-800">{agentState.activity_data.length} found</p>
-                    </div>
-                  )}
+          {/* State Sidebar - Conditioned on showDetails */}
+          {showDetails && (
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-lg border border-purple-100 p-6 sticky top-24 animate-in slide-in-from-right-10 duration-300">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-purple-600" />
+                    Trip Details
+                  </h2>
                 </div>
-              )}
+
+                {!hasState ? (
+                  <p className="text-sm text-gray-500 italic">Details will appear as you chat...</p>
+                ) : (
+                  <div className="space-y-4">
+                    {plan && (
+                      <>
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <MapPin className="w-5 h-5 text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-900 uppercase">Destination</span>
+                          </div>
+                          <p className="font-bold text-gray-800">{plan.destination || '---'}</p>
+                          {agentState.city_code && (
+                            <p className="text-xs text-gray-600 mt-1">Code: {agentState.city_code}</p>
+                          )}
+                        </div>
+
+                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="w-5 h-5 text-purple-600" />
+                            <span className="text-xs font-semibold text-purple-900 uppercase">Dates</span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-800">
+                            {plan.departure_date ? `${plan.departure_date}` : '---'}
+                          </p>
+                          {plan.arrival_date && (
+                            <p className="text-sm font-medium text-gray-800 mt-1">to {plan.arrival_date}</p>
+                          )}
+                        </div>
+
+                        <div className="bg-pink-50 p-4 rounded-xl border border-pink-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="w-5 h-5 text-pink-600" />
+                            <span className="text-xs font-semibold text-pink-900 uppercase">Budget</span>
+                          </div>
+                          <p className="font-bold text-gray-800">${plan.budget || 0}</p>
+                        </div>
+                      </>
+                    )}
+
+                    {(agentState.adults || agentState.children || agentState.infants) && (
+                      <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-5 h-5 text-orange-600" />
+                          <span className="text-xs font-semibold text-orange-900 uppercase">Passengers</span>
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-700">
+                          {agentState.adults && <p>Adults: {agentState.adults}</p>}
+                          {agentState.children > 0 && <p>Children: {agentState.children}</p>}
+                          {agentState.infants > 0 && <p>Infants: {agentState.infants}</p>}
+                          {agentState.travel_class && (
+                            <p className="text-xs text-gray-600 mt-2">Class: {agentState.travel_class}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {agentState.flight_data && agentState.flight_data.length > 0 && (
+                      <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Plane className="w-5 h-5 text-cyan-600" />
+                          <span className="text-xs font-semibold text-cyan-900 uppercase">Flights Found</span>
+                        </div>
+                        <p className="font-bold text-gray-800">{agentState.flight_data.length} options</p>
+                        {agentState.selected_flight_index !== null && (
+                          <p className="text-xs text-gray-600 mt-1">Selected: Option {agentState.selected_flight_index + 1}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {agentState.hotel_data && agentState.hotel_data.hotels && agentState.hotel_data.hotels.length > 0 && (
+                      <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Hotel className="w-5 h-5 text-emerald-600" />
+                          <span className="text-xs font-semibold text-emerald-900 uppercase">Hotels Found</span>
+                        </div>
+                        <p className="font-bold text-gray-800">{agentState.hotel_data.hotels.length} options</p>
+                        {agentState.selected_hotel_index !== null && (
+                          <p className="text-xs text-gray-600 mt-1">Selected: Option {agentState.selected_hotel_index + 1}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {agentState.activity_data && agentState.activity_data.length > 0 && (
+                      <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Compass className="w-5 h-5 text-yellow-600" />
+                          <span className="text-xs font-semibold text-yellow-900 uppercase">Activities</span>
+                        </div>
+                        <p className="font-bold text-gray-800">{agentState.activity_data.length} found</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
