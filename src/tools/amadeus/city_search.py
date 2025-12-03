@@ -1,37 +1,23 @@
 from pydantic import BaseModel, Field
 import requests
-from typing import Dict, Type
+from typing import Dict, Type, Optional
 from .auth import AmadeusAuth
 from langchain.tools import BaseTool
 
-
 class CitySearchInput(BaseModel):
     """Input schema for city/airport search"""
-
-    keyword: str = Field(
-        description="The name of the city or airport (e.g., 'Nice', 'Paris')"
-    )
-    subType: str = Field(
-        "CITY", description="The type of location: CITY or AIRPORT. Default: CITY"
-    )
-
+    keyword: str = Field(description="The name of the city or airport")
+    subType: str = Field("CITY", description="The type of location: CITY or AIRPORT. Default: CITY")
 
 class CitySearchResult(BaseModel):
     """Output schema for city/airport search result"""
-
     name: str = Field(description="Name of the city or airport")
     iata_code: str = Field(description="IATA code of the city or airport")
 
-
 class CitySearchTool(BaseTool):
     """Tool for searching for IATA/City codes using Amadeus Location API"""
-
     name: str = "get_city_code"
-    description: str = """
-    Searches for the Amadeus City Code (e.g., 'PAR' for Paris) given a city name.
-    This is essential before searching for flights or hotels.
-    Input requires the city name as a keyword.
-    """
+    description: str = "Searches for Amadeus City Code. Returns None if not found."
     args_schema: Type[BaseModel] = CitySearchInput
     amadeus_auth: AmadeusAuth | None = None
 
@@ -39,7 +25,8 @@ class CitySearchTool(BaseTool):
         super().__init__()
         self.amadeus_auth = amadeus_auth
 
-    def _run(self, keyword: str, subType: str = "CITY") -> CitySearchResult:
+    # Updated signature to return Optional[CitySearchResult]
+    def _run(self, keyword: str, subType: str = "CITY") -> Optional[CitySearchResult]:
         """Search for city/location code"""
         if not self.amadeus_auth:
             raise ValueError("AmadeusAuth instance is required for city search.")
@@ -58,21 +45,19 @@ class CitySearchTool(BaseTool):
 
             response = requests.get(url, headers=headers, params=params)
             response.raise_for_status()
-
             data = response.json()
 
             if not data.get("data"):
-                raise ValueError(f"No location found for keyword: {keyword}")
+                return None
 
             city_code = data["data"][0]["iataCode"]
-
             name = data["data"][0].get("name", keyword)
 
             return CitySearchResult(name=name, iata_code=city_code)
 
         except Exception as e:
-            raise e
+            print(f"Tool Error for {keyword}: {e}")
+            return None
 
     async def _arun(self, *args, **kwargs):
-        """Async version - not implemented"""
         raise NotImplementedError("Async not supported yet")
