@@ -5,8 +5,10 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 import json
 from typing import AsyncGenerator
-
+from dotenv import load_dotenv
 from src.graph import create_travel_agent_graph
+
+load_dotenv()
 
 app = FastAPI(title="Travel Agent API")
 
