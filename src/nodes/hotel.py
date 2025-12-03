@@ -4,29 +4,24 @@ from datetime import datetime
 import json
 from langchain_ollama import ChatOllama
 
+from langgraph.types import Command
+
+from src.states.hotel import HotelSearchState
 from src.tools import HotelSearchTool, AmadeusAuth
 from src.states import AgentState, PlanDetailsState
+
 
 @traceable
 def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     print("\n🏨 HOTEL AGENT: Searching...")
     plan: PlanDetailsState | None = state.plan
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping hotel search.")
-        return state
-
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I need your travel details to search for hotels. Where and when are you traveling?"
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
+    if not plan or state.needs_user_input:
+        print("No plan found or awaiting user input, cannot search hotels.")
         return state
 
     if not plan.need_hotel:
         print("   ℹ️  Hotel not requested, skipping...")
-        state.needs_user_input = False
         state.hotel_data = None
         return state
 
@@ -35,19 +30,21 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-        return state
+        state.last_node = "hotel_agent"
+        return Command(goto="compiler", update=state)
 
     if not plan.departure_date or not plan.arrival_date:
         question = "I need your check-in and check-out dates to search for hotels. When will you be staying?"
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-        return state
+        state.last_node = "hotel_agent"
+        return Command(goto="compiler", update=state)
 
     if state.hotel_data is None:
         try:
             search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
-            raw_result = search_hotels.invoke(
+            result: HotelSearchState = search_hotels.invoke(
                 {
                     "city_code": state.city_code,
                     "check_in_date": plan.departure_date,
@@ -56,11 +53,12 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
                 }
             )
 
-            if not raw_result or "data" not in raw_result or not raw_result["data"]:
+            if not result or not result.hotels or len(result.hotels) == 0:
                 print("   ⚠️ No hotels found via API.")
                 state.needs_user_input = True
                 state.validation_question = "I couldn't find any hotels in that area for those dates. Shall we try a different location?"
                 state.messages.append(AIMessage(content=state.validation_question))
+                state.last_node = "hotel_agent"
                 return state
 
         except Exception as e:
@@ -69,6 +67,8 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
             state.needs_user_input = True
             state.validation_question = question
             state.messages.append(AIMessage(content=question))
+            state.last_node = "hotel_agent"
+            return Command(goto="compiler", update=state)
     else:
         print("   ℹ️  Hotel data found, proceeding with analysis...")
 
@@ -82,7 +82,6 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     except Exception as e:
         duration = 1
         print(f"   ⚠️ Date parsing error: {e}, defaulting duration to 1 night.")
-
         PROMPT = f"""
 You are an expert Travel Concierge. Your task is to analyze a list of available hotels and select the best matches for the user.
 
@@ -97,7 +96,7 @@ USER PROFILE
 ----------------------------
 AVAILABLE HOTELS (RAW DATA)
 ----------------------------
-{json.dumps(raw_result.get("data", [])[:15])}
+{state.hotel_data.hotels if state.hotel_data else "No hotel data available."}
 
 ----------------------------
 INSTRUCTIONS
@@ -124,10 +123,14 @@ Return a JSON object containing the index of the selected hotel from the list pr
 }}
 """
         print("   🧠 Analyzing hotel options...")
-        response = llm.invoke([
-            SystemMessage(content="You are a hotel recommendation engine. Output strictly valid JSON."),
-            {"role": "user", "content": PROMPT}
-        ])
+        response = llm.invoke(
+            [
+                SystemMessage(
+                    content="You are a hotel recommendation engine. Output strictly valid JSON."
+                ),
+                {"role": "user", "content": PROMPT},
+            ]
+        )
 
         content = response.content
         if "```json" in content:
@@ -136,14 +139,25 @@ Return a JSON object containing the index of the selected hotel from the list pr
             content = content.split("```")[1].split("```")[0]
 
         selection_data = json.loads(content.strip())
-        
+
         selected_index = selection_data.get("selected_hotel_index", None)
 
         if selected_index:
             state.selected_hotel_index = selected_index
-            print(f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data[selected_index]}")
+            print(
+                f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data[selected_index]}"
+            )
         else:
             state.hotel_data = []
             print("   ⚠️ No valid hotel selection made.")
+
+    print("   ✅ Hotel analysis complete.")
+    print(
+        f"   Selected hotel (Index {state.selected_hotel_index}): {state.hotel_data[state.selected_hotel_index]}"
+    )
+
+    state.last_node = None
+    state.needs_user_input = False
+    state.validation_question = None
 
     return state

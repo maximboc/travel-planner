@@ -4,6 +4,8 @@ import json
 from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
+from langgraph.types import Command
+
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
 from src.tools import FlightSearchTool, AmadeusAuth
 
@@ -16,6 +18,32 @@ def flight_skipped(state: AgentState) -> bool:
     )
 
 
+def format_flights_for_llm_compact(results: list[FlightSearchResultState]) -> str:
+    """More compact version of flight formatting for LLM analysis."""
+
+    lines = []
+
+    for i, result in enumerate(results, start=1):
+        lines.append(f"Flight Offer #{i} — {result.price} {result.currency}")
+
+        for itin_index, itinerary in enumerate(result.itineraries, start=1):
+            lines.append(
+                f"  Itinerary {itin_index}: {len(itinerary.segments)} segments"
+            )
+
+            for seg in itinerary.segments:
+                lines.append(
+                    f"    {seg.airline}: "
+                    f"{seg.departure_airport} {seg.departure_time} → "
+                    f"{seg.arrival_airport} {seg.arrival_time} "
+                    f"(stops: {seg.stops})"
+                )
+
+        lines.append("")  # separation
+
+    return "\n".join(lines).strip()
+
+
 @traceable
 def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
     print("\n✈️  FLIGHT AGENT: Searching...")
@@ -25,22 +53,11 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         )
         return state
 
-    if state.needs_user_input:
-        print("   ⚠️ Awaiting user input, skipping flight search.")
+    if state.needs_user_input or not state.plan:
+        print("No plan found or awaiting user input, cannot search flights.")
         return state
 
-    plan: PlanDetailsState | None = state.plan
-
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I need your travel details to search for flights. Where are you going and when?"
-
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
-
-        return state
-
+    plan: PlanDetailsState = state.plan
     try:
         flight_search_tool = FlightSearchTool(amadeus_auth)
         flight_results: List[FlightSearchResultState] = flight_search_tool.invoke(
@@ -51,7 +68,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
                 "return_date": plan.arrival_date,
                 "adults": getattr(state, "adults", 1),
                 "travel_class": getattr(state, "travel_class", "ECONOMY"),
-                "max_results": 3, # TODO: Make configurable
+                "max_results": 3,  # TODO: Make configurable
             }
         )
     except Exception as e:
@@ -61,8 +78,8 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-
-        return state
+        state.last_node = "flight_agent"
+        return Command(goto="compiler", update=state)
 
     if not flight_results:
         print("   ⚠️ No flights found.")
@@ -71,19 +88,16 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
+        state.last_node = "flight_agent"
+        return Command(goto="compiler", update=state)
 
-        return state
-
-    flight_results_json = json.dumps(
-        [r.model_dump() for r in flight_results],
-        indent=2,
-    )
+    flight_results_str = format_flights_for_llm_compact(flight_results)
 
     filtering_prompt = f"""Analyze these flights and filter to the top 3 viable options.
 
 Budget: ${plan.remaining_budget}
 Flights:
-{flight_results_json}
+{flight_results_str}
 
 Eliminate flights that:
 - Exceed budget
@@ -125,20 +139,17 @@ Return the indices of the top 3 flights as JSON:
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
+        state.last_node = "flight_agent"
+        return Command(goto="compiler", update=state)
 
-        return state
-
-    top_flights_json = json.dumps(
-        [r.model_dump() for r in top_flights],
-        indent=2,
-    )
+    top_flights_str = format_flights_for_llm_compact(top_flights)
 
     PROMPT = f"""You have available hotel options. Select the BEST one. Provide a reasoned choice, no code.
 ------------------------
 TOP FLIGHT OPTIONS
 ------------------------
 Flights:
-{top_flights_json}
+{top_flights_str}
 
 -----------------------
 YOUR TASK
@@ -172,11 +183,6 @@ Return JSON:
             result = json.loads(json_match.group())
             selected_index = result.get("selected_original_index", top_indices[0])
             flight_cost = float(result.get("price", 0.0))
-            recommendation = result.get("recommendation", "")
-
-            print(f"   ✅ Selected Flight #{selected_index + 1}")
-            print(f"   💰 Cost: ${flight_cost}")
-            print(f"   💡 {recommendation}")
         else:
             raise ValueError("No JSON found")
     except Exception as e:
@@ -186,11 +192,17 @@ Return JSON:
         print(f"   ✅ Selected Flight #{selected_index + 1} (fallback)")
         print(f"   💰 Cost: ${flight_cost}")
 
+    recommendation = result.get("recommendation", "")
+    print(f"   ✅ Selected Flight #{selected_index + 1}")
+    print(f"   💰 Cost: ${flight_cost}")
+    print(f"   💡 {recommendation}")
+
     plan.remaining_budget = plan.remaining_budget - flight_cost
     state.plan = plan
     state.flight_data = flight_results
     state.selected_flight_index = selected_index
     state.needs_user_input = False
     state.validation_question = None
+    state.last_node = None
 
     return state
