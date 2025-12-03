@@ -3,16 +3,9 @@ from langchain_ollama import ChatOllama
 from langsmith import traceable
 from langchain_core.messages.system import SystemMessage
 from langchain_core.messages.ai import AIMessage
-from src.states import AgentState, PlanDetailsState, TravelClass
+from langgraph.types import Command
 
-
-def passenger_missing(state: AgentState):
-    question = "I need your travel details to understand the number of passengers. Could you provide that information?"
-
-    state.needs_user_input = True
-    state.validation_question = question
-    state.messages.append(AIMessage(content=question))
-    print(f"   ❓ {question}")
+from src.states import AgentState, TravelClass
 
 
 def passenger_skipped(state: AgentState) -> bool:
@@ -29,19 +22,8 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
         )
         return state
 
-    if state.needs_user_input:
-        print("   ℹ️  Awaiting user input for passenger details, skipping passenger analysis.")
-        return state
-
-    plan: PlanDetailsState | None = state.plan
-    if not plan:
-        print("   ⚠️ No plan found in state.")
-        question = "I need your travel details to understand the number of passengers. Could you provide that information?"
-
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
-
+    if state.needs_user_input or not state.plan:
+        print("No plan found or awaiting user input, cannot analyze passengers.")
         return state
 
     messages = state.messages
@@ -76,9 +58,9 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
             state.needs_user_input = True
             state.validation_question = question
             state.messages.append(AIMessage(content=question))
-
+            state.last_node = "passenger_agent"
             print(f"   ❓ Need clarification: {question}")
-            return state
+            return Command(goto="compiler", update=state)
 
         # Set values
         state.adults = passenger_data.get("adults", 1)
@@ -88,14 +70,23 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
         state.travel_class = TravelClass(raw)
         state.needs_user_input = False
 
-        print(
-            f"   Passengers: {state.adults or 'not set'} adult(s), {state.children or 'not set'} child(ren), {state.infants or 'not set'} infant(s)"
-        )
-
     except Exception as e:
         print(f"   ⚠️ Error: {e}")
         state.needs_user_input = True
         state.validation_question = "I couldn't understand the passenger details. How many people are traveling?"
         state.messages.append(AIMessage(content=state.validation_question))
+        state.last_node = "passenger_agent"
+        return Command(goto="compiler", update=state)
+
+    print(
+        f"   Passengers: \n"
+        f"   - {state.adults or 'not set'} adult(s)\n"
+        f"   - {state.children or 'not set'} child(ren)\n"
+        f"   - {state.infants or 'not set'} infant(s)"
+    )
+
+    state.last_node = None
+    state.validation_question = None
+    state.needs_user_input = False
 
     return state
