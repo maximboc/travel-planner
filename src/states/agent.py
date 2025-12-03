@@ -8,17 +8,20 @@ from langgraph.graph.message import add_messages
 
 from enum import Enum
 
+
 class TravelClass(str, Enum):
     ECONOMY = "ECONOMY"
     BUSINESS = "BUSINESS"
     FIRST = "FIRST"
 
+
 def replace_value(old_val, new_val):
     return new_val
 
+
 class AgentState(BaseModel):
     # Core Messages & Plan
-    messages: Annotated[list, add_messages] = Field(default_factory=list) 
+    messages: Annotated[list, add_messages] = Field(default_factory=list)
     plan: Annotated[Optional[PlanDetailsState], replace_value] = Field(
         default=None, description="Details of the travel plan"
     )
@@ -29,6 +32,9 @@ class AgentState(BaseModel):
     )
     validation_question: Annotated[Optional[str], replace_value] = Field(
         default=None, description="Question to ask the user for clarification"
+    )
+    last_node: Annotated[Optional[str], replace_value] = Field(
+        default=None, description="The last executed node in the agent workflow"
     )
 
     # Passenger Info
@@ -42,8 +48,7 @@ class AgentState(BaseModel):
         default=None, description="Number of infant travelers (under 2 years)"
     )
     travel_class: Annotated[Optional[TravelClass], replace_value] = Field(
-        default=None,
-        description="Travel class (ECONOMY, BUSINESS, FIRST)"
+        default=None, description="Travel class (ECONOMY, BUSINESS, FIRST)"
     )
 
     # Depart / Arrival
@@ -53,10 +58,10 @@ class AgentState(BaseModel):
     origin_code: Annotated[Optional[str], replace_value] = Field(
         default=None, description="IATA code of the origin city"
     )
-    
+
     # Flights
-    flight_data: Annotated[Optional[List[FlightSearchResultState]], replace_value] = Field(
-        default=None, description="Flight search results"
+    flight_data: Annotated[Optional[List[FlightSearchResultState]], replace_value] = (
+        Field(default=None, description="Flight search results")
     )
     selected_flight_index: Annotated[Optional[int], replace_value] = Field(
         default=None, description="Index of the selected flight"
@@ -71,8 +76,8 @@ class AgentState(BaseModel):
     )
 
     # Activities
-    activity_data: Annotated[Optional[List[ActivityResultState]], replace_value] = Field(
-        default=None, description="Activity search results"
+    activity_data: Annotated[Optional[List[ActivityResultState]], replace_value] = (
+        Field(default=None, description="Activity search results")
     )
     final_itinerary: Annotated[Optional[str], replace_value] = Field(
         default=None, description="Final itinerary details"

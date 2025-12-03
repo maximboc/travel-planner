@@ -3,8 +3,10 @@ from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
 from src.tools import CitySearchTool, AmadeusAuth
+
 # Ensure CitySearchResult is importable or just rely on object properties
 from src.states import AgentState, PlanDetailsState
+
 
 @traceable
 def city_resolver_node(
@@ -21,18 +23,18 @@ def city_resolver_node(
     def resolve_iata(location_name: str, location_type: str) -> tuple[str, bool]:
         clean_name = location_name.split(",")[0].strip()
         print(f"Resolving code for: {clean_name}...")
-        
+
         # 1. Try the Tool first
         search_result = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
-        
+
         # 2. Check if Tool succeeded (It returns an object if success, None if fail)
         if search_result:
             print(f"   ✅ API Found: {search_result.iata_code}")
             return search_result.iata_code, True
-            
+
         # 3. Fallback: API failed, ask LLM directly
-        print(f"   ⚠️ API returned null. Falling back to LLM knowledge...")
-        
+        print("   ⚠️ API returned null. Falling back to LLM knowledge...")
+
         fallback_prompt = f"""
         The flight search API could not find a code for "{location_name}".
         Based on your general knowledge, what is the 3-letter IATA airport/city code for "{location_name}"?
@@ -40,14 +42,14 @@ def city_resolver_node(
         Return ONLY the 3-letter code (e.g. NYC). Do not write sentences.
         If you are not 100% sure, return 'UNKNOWN'.
         """
-        
+
         code = llm.invoke(fallback_prompt).content.strip().upper()
-        
+
         # Validate LLM response
         if len(code) == 3 and code.isalpha() and code != "UNKNOWN":
             print(f"   🤖 LLM Resolved: {code}")
             return code, True
-            
+
         # 4. Final Fail
         print(f"   ❌ Could not resolve code for {clean_name}")
         return "", False
@@ -60,6 +62,7 @@ def city_resolver_node(
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
+        state.last_node = "city_resolver"
         return Command(goto="compiler", update=state)
 
     dest_code, dest_success = resolve_iata(plan.destination, "destination")
@@ -69,6 +72,7 @@ def city_resolver_node(
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
+        state.last_node = "city_resolver"
         return Command(goto="compiler", update=state)
 
     plan.origin = origin_code
@@ -78,6 +82,7 @@ def city_resolver_node(
     state.plan = plan
     state.needs_user_input = False
     state.validation_question = None
+    state.last_node = None
 
     print(f"   ✅ Route: {origin_code} -> {dest_code}")
     return state

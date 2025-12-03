@@ -8,6 +8,7 @@ from langgraph.types import Command
 
 from src.states import AgentState, PlanDetailsState
 
+
 def planner_skipped(state: AgentState) -> bool:
     return (
         state.plan is not None
@@ -23,6 +24,9 @@ def planner_skipped(state: AgentState) -> bool:
 @traceable
 def planner_node(state: AgentState, llm: ChatOllama):
     print("\n🧠 PLANNER: Analyzing request...")
+    if state.last_node is not None and state.last_node != "planner_agent":
+        return Command(goto=state.last_node, update=state)
+
     if planner_skipped(state):
         print("   ℹ️  Plan already exists and no user input needed, skipping planning.")
         return state
@@ -95,7 +99,7 @@ Return ONLY the JSON object.
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
-
+        state.last_node = "planner_agent"
         print(f"   ❓ {question}")
         return Command(goto="compiler", update=state)
 
@@ -113,19 +117,41 @@ Return ONLY the JSON object.
     if not plan_data.get("budget"):
         missing_fields.append("budget")
 
-    budget = float(plan_data.get("budget")) if plan_data.get("budget") else None
+    try :
+        budget = float(plan_data.get("budget")) if plan_data.get("budget") else None
+    except ValueError:
+        budget = None
+        missing_fields.append("valid budget amount")
+    
+    try:
+        plan_data["interests"] = str(plan_data.get("interests", ""))
+    except ValueError:
+        plan_data["interests"] = ""
 
-    plan = PlanDetailsState(
-        destination=plan_data["destination"],
-        origin=plan_data["origin"],
-        departure_date=plan_data["departure_date"],
-        arrival_date=plan_data["arrival_date"],
-        budget=budget,
-        remaining_budget=budget,
-        interests=plan_data.get("interests", ""),
-        need_hotel=plan_data.get("need_hotel", False),
-        need_activities=plan_data.get("need_activities", False),
-    )
+    plan = None
+
+    try:
+        plan = PlanDetailsState(
+            destination=plan_data["destination"],
+            origin=plan_data["origin"],
+            departure_date=plan_data["departure_date"],
+            arrival_date=plan_data["arrival_date"],
+            budget=budget,
+            remaining_budget=budget,
+            interests=plan_data.get("interests", ""),
+            need_hotel=plan_data.get("need_hotel", False),
+            need_activities=plan_data.get("need_activities", False),
+        )
+    except Exception as e:
+        print(f"   ⚠️ Incomplete plan data: {e}")
+        question = "I couldn't extract all the necessary details for your trip. Could you please provide:\n- Where do you want to go?\n- Where are you traveling from?\n- When do you want to depart?\n- When do you want to return?\n- What's your budget?"
+
+        state.needs_user_input = True
+        state.validation_question = question
+        state.messages.append(AIMessage(content=question))
+        state.last_node = "planner_agent"
+        print(f"   ❓ {question}")
+        return Command(goto="compiler", update=state)
 
     state.plan = plan
 
@@ -139,6 +165,7 @@ Return ONLY the JSON object.
         state.needs_user_input = True
         state.validation_question = question
         state.messages.append(AIMessage(content=question))
+        state.last_node = "planner_agent"
         print(f"   ❓ {question}")
         return Command(goto="compiler", update=state)
 
@@ -151,5 +178,6 @@ Return ONLY the JSON object.
 
     state.needs_user_input = False
     state.validation_question = None
+    state.last_node = None
 
     return state

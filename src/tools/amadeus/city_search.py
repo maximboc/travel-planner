@@ -3,18 +3,27 @@ import requests
 from typing import Dict, Type, Optional
 from .auth import AmadeusAuth
 from langchain.tools import BaseTool
+import time
+
 
 class CitySearchInput(BaseModel):
     """Input schema for city/airport search"""
+
     keyword: str = Field(description="The name of the city or airport")
-    subType: str = Field("CITY", description="The type of location: CITY or AIRPORT. Default: CITY")
+    subType: str = Field(
+        "CITY", description="The type of location: CITY or AIRPORT. Default: CITY"
+    )
+
 
 class CitySearchResult(BaseModel):
     """Output schema for city/airport search result"""
+
     name: str = Field(description="Name of the city or airport")
     iata_code: str = Field(description="IATA code of the city or airport")
 
+
 class CitySearchTool(BaseTool):
+    last_called: Optional[str] = None
     """Tool for searching for IATA/City codes using Amadeus Location API"""
     name: str = "get_city_code"
     description: str = "Searches for Amadeus City Code. Returns None if not found."
@@ -25,12 +34,18 @@ class CitySearchTool(BaseTool):
         super().__init__()
         self.amadeus_auth = amadeus_auth
 
-    # Updated signature to return Optional[CitySearchResult]
     def _run(self, keyword: str, subType: str = "CITY") -> Optional[CitySearchResult]:
         """Search for city/location code"""
         if not self.amadeus_auth:
             raise ValueError("AmadeusAuth instance is required for city search.")
-
+        if self.last_called is not None:
+            sleep_time = 1 - (
+                time.time()
+                - time.mktime(time.strptime(self.last_called, "%Y-%m-%d %H:%M:%S"))
+            )
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+        self.last_called = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
         try:
             token = self.amadeus_auth.get_access_token()
             url = f"{self.amadeus_auth.base_url}/v1/reference-data/locations"

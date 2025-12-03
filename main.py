@@ -1,5 +1,4 @@
 import uuid
-import os
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from src.utils import TokenUsageTracker, print_graph_execution
@@ -9,6 +8,7 @@ from src.states import AgentState
 from src.graph import create_travel_agent_graph
 
 load_dotenv()
+
 
 def main(app):
     scenario_id = str(uuid.uuid4())
@@ -48,7 +48,7 @@ def main(app):
         try:
             # Note: For CLI, we append to state object directly as it persists in memory loop
             state.messages.append(HumanMessage(content=user_input))
-            
+
             result = app.invoke(state, config=config)
 
             if result.get("needs_user_input", False):
@@ -60,7 +60,10 @@ def main(app):
                 print(result["final_itinerary"])
                 print("\n✅ Planning complete!")
 
-                if input("\nWould you like to plan another trip? (y/n): ").lower() == "y":
+                if (
+                    input("\nWould you like to plan another trip? (y/n): ").lower()
+                    == "y"
+                ):
                     scenario_id = str(uuid.uuid4())
                     thread_id = f"session_{scenario_id}"
                     config["configurable"]["thread_id"] = thread_id
@@ -71,13 +74,15 @@ def main(app):
         except Exception as e:
             print(f"\n❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
 
     print_graph_execution()
 
+
 if __name__ == "__main__":
     # Initialize the graph from the shared source
     app = create_travel_agent_graph()
-    
+
     # Run the CLI
     main(app)

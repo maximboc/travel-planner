@@ -2,6 +2,7 @@ from langchain_ollama import ChatOllama
 from langsmith import traceable
 from src.states import AgentState
 
+
 @traceable
 def compiler_node(state: AgentState, llm: ChatOllama):
     print("\n✍️  COMPILER: Drafting Itinerary...")
@@ -27,7 +28,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
     Remaining Budget: ${state.plan.remaining_budget}
     Travelers: {state.adults} Adults, {state.children} Children, {state.infants} Infants, Class: {state.travel_class}
 
-    {"" if not state.selected_flight_index is None else f"Flight Options: {state.flight_data[state.selected_flight_index]}"}
+    {"" if state.selected_flight_index is not None else f"Flight Options: {state.flight_data[state.selected_flight_index]}"}
     {"" if not state.plan.need_hotel else f"Hotel Options: {state.hotel_data[state.selected_hotel_index]}"}
     {"" if not state.plan.need_activities else f"Activities: {state.activity_data}"}
 

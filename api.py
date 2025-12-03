@@ -6,13 +6,14 @@ from langchain_core.messages import HumanMessage
 import json
 from typing import AsyncGenerator
 from dotenv import load_dotenv
+import uvicorn
+
 from src.graph import create_travel_agent_graph
 
 load_dotenv()
 
 app = FastAPI(title="Travel Agent API")
 
-# Allow React to connect to this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
@@ -21,8 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the graph ONCE
 agent_app = create_travel_agent_graph()
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -31,8 +32,7 @@ class ChatRequest(BaseModel):
 def serialize_state_for_frontend(state: dict) -> dict:
     """Convert state to JSON-serializable format for frontend"""
     frontend_state = {}
-    
-    # Extract relevant fields
+
     if state.get("plan"):
         plan = state["plan"]
         frontend_state["plan"] = {
@@ -43,12 +43,20 @@ def serialize_state_for_frontend(state: dict) -> dict:
             "need_hotel": getattr(plan, "need_hotel", False),
             "need_activities": getattr(plan, "need_activities", False),
         }
-    
-    for field in ["adults", "children", "infants", "travel_class", "city_code", 
-                  "origin_code", "selected_flight_index", "selected_hotel_index"]:
+
+    for field in [
+        "adults",
+        "children",
+        "infants",
+        "travel_class",
+        "city_code",
+        "origin_code",
+        "selected_flight_index",
+        "selected_hotel_index",
+    ]:
         if field in state and state[field] is not None:
             frontend_state[field] = state[field]
-    
+
     if state.get("flight_data"):
         frontend_state["flight_data"] = [
             {
@@ -57,9 +65,9 @@ def serialize_state_for_frontend(state: dict) -> dict:
                 "departure_time": getattr(f, "departure_time", None),
                 "arrival_time": getattr(f, "arrival_time", None),
             }
-            for f in state["flight_data"][:5]  # Limit to 5 flights
+            for f in state["flight_data"]
         ]
-    
+
     if state.get("hotel_data"):
         hotel_data = state["hotel_data"]
         if hasattr(hotel_data, "hotels"):
@@ -69,93 +77,144 @@ def serialize_state_for_frontend(state: dict) -> dict:
                         "name": getattr(h, "name", None),
                         "rating": getattr(h, "rating", None),
                     }
-                    for h in hotel_data.hotels[:5]  # Limit to 5 hotels
+                    for h in hotel_data.hotels
                 ]
             }
-    
+
     if state.get("activity_data"):
         frontend_state["activity_data"] = [
             {
                 "name": getattr(a, "name", None),
                 "description": getattr(a, "description", None),
             }
-            for a in state["activity_data"][:5]  # Limit to 5 activities
+            for a in state["activity_data"]
         ]
-    
+
     return frontend_state
 
+
 async def stream_agent_events(
-    message: str, 
-    session_id: str
+    message: str, session_id: str
 ) -> AsyncGenerator[str, None]:
     """Stream events from LangGraph execution"""
-    
-    config = {"configurable": {"thread_id": session_id}}
-    
+
+    config = {"configurable": {"thread_id": session_id }}
+
     snapshot = agent_app.get_state(config)
     existing_messages = snapshot.values.get("messages", []) if snapshot.values else []
     updated_messages = existing_messages + [HumanMessage(content=message)]
-    
+
+    # Track if we've sent any assistant response
+    assistant_response_sent = False
+    current_assistant_content = ""
+
     try:
-        # 2. Stream through the graph
         async for event in agent_app.astream_events(
-            {"messages": updated_messages}, 
-            config=config,
-            version="v1"
+            {"messages": updated_messages}, config=config, version="v1"
         ):
             event_type = event.get("event")
-            
-            # Node start event
+
             if event_type == "on_chain_start":
                 name = event.get("name", "")
-                if name in ["planner", "city_resolver", "passenger_agent", 
-                           "flight_agent", "hotel_agent", "activity_agent", 
-                           "compiler", "reviewer"]:
+                if name in [
+                    "planner",
+                    "city_resolver",
+                    "passenger_agent",
+                    "flight_agent",
+                    "hotel_agent",
+                    "activity_agent",
+                    "compiler",
+                    "reviewer",
+                ]:
                     yield f"data: {json.dumps({'type': 'node_start', 'node': name})}\n\n"
-            
-            # Node end event
+
             elif event_type == "on_chain_end":
                 name = event.get("name", "")
-                if name in ["planner", "city_resolver", "passenger_agent", 
-                           "flight_agent", "hotel_agent", "activity_agent", 
-                           "compiler", "reviewer"]:
-                    
+                if name in [
+                    "planner",
+                    "city_resolver",
+                    "passenger_agent",
+                    "flight_agent",
+                    "hotel_agent",
+                    "activity_agent",
+                    "compiler",
+                    "reviewer",
+                ]:
                     # Get current state and send update
                     current_state = agent_app.get_state(config)
                     if current_state.values:
-                        frontend_state = serialize_state_for_frontend(current_state.values)
+                        frontend_state = serialize_state_for_frontend(
+                            current_state.values
+                        )
                         yield f"data: {json.dumps({'type': 'state_update', 'state': frontend_state})}\n\n"
-                        
-                        if current_state.values.get("needs_user_input"):
-                            question = current_state.values.get("validation_question")
-                            if question:
-                                yield f"data: {json.dumps({'type': 'message', 'content': question, 'isIntermediate': True})}\n\n"
-                    
+
                     yield f"data: {json.dumps({'type': 'node_end', 'node': name})}\n\n"
-        
-        # 3. Get final state
+
+            elif event_type in ["on_llm_stream", "on_chat_model_stream"]:
+                # Stream LLM tokens as they arrive
+                token_data = event.get("data", {})
+                chunk = token_data.get("chunk")
+                
+                if chunk:
+                    # Extract content from AIMessageChunk
+                    if hasattr(chunk, "content") and chunk.content:
+                        token_content = chunk.content
+                        current_assistant_content += token_content
+                        yield f"data: {json.dumps({'type': 'token', 'content': token_content})}\n\n"
+                        assistant_response_sent = True
+
+        # After streaming completes, get final state
         final_state = agent_app.get_state(config)
-        
+
         if final_state.values:
-            # Send final state update
             frontend_state = serialize_state_for_frontend(final_state.values)
             yield f"data: {json.dumps({'type': 'state_update', 'state': frontend_state})}\n\n"
-            
-            # Send final response
-            # *** MODIFIED: Prioritize validation questions ***
-            if final_state.values.get("needs_user_input") and final_state.values.get("validation_question"):
-                response_text = final_state.values.get("validation_question")
+
+            # Handle different completion scenarios
+            if final_state.values.get("needs_user_input"):
+                # Agent is asking for more information
+                validation_question = final_state.values.get("validation_question", "")
+                
+                # If we already streamed the question, just signal completion
+                if assistant_response_sent:
+                    yield f"data: {json.dumps({'type': 'needs_input', 'complete': True, 'content': validation_question})}\n\n"
+                else:
+                    # If no streaming occurred, send the question as a complete message
+                    yield f"data: {json.dumps({'type': 'assistant_message', 'content': validation_question})}\n\n"
+                    yield f"data: {json.dumps({'type': 'needs_input', 'complete': True, 'content': validation_question})}\n\n"
+
             elif final_state.values.get("final_itinerary"):
+                # Final itinerary is ready
                 response_text = final_state.values.get("final_itinerary")
+                if not assistant_response_sent:
+                    yield f"data: {json.dumps({'type': 'assistant_message', 'content': response_text})}\n\n"
+                yield f"data: {json.dumps({'type': 'final_itinerary', 'complete': True})}\n\n"
+                
             else:
-                response_text = "I'm processing that."
-            
-            yield f"data: {json.dumps({'type': 'final', 'content': response_text})}\n\n"
-    
+                # Default completion
+                if not assistant_response_sent:
+                    # Get the last assistant message if available
+                    messages = final_state.values.get("messages", [])
+                    last_message = None
+                    for msg in reversed(messages):
+                        if hasattr(msg, "type") and msg.type == "ai":
+                            last_message = msg.content
+                            break
+                    
+                    if last_message:
+                        yield f"data: {json.dumps({'type': 'assistant_message', 'content': last_message})}\n\n"
+                    else:
+                        yield f"data: {json.dumps({'type': 'assistant_message', 'content': 'Processing complete.'})}\n\n"
+                
+                yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+
     except Exception as e:
         print(f"Error in stream: {e}")
+        import traceback
+        traceback.print_exc()
         error_msg = f"⚠️ Error: {str(e)}"
-        yield f"data: {json.dumps({'type': 'final', 'content': error_msg})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
+
 
 @app.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
@@ -168,53 +227,9 @@ async def chat_stream_endpoint(request: ChatRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
-        }
+            "X-Accel-Buffering": "no",
+        },
     )
 
-@app.post("/chat")
-async def chat_endpoint(request: ChatRequest):
-    """
-    Original non-streaming endpoint (kept for compatibility)
-    """
-    config = {"configurable": {"thread_id": request.session_id}}
-    
-    # 1. Manually fetch and append history
-    snapshot = agent_app.get_state(config)
-    existing_messages = snapshot.values.get("messages", []) if snapshot.values else []
-    
-    # 2. Add the new user message to the history
-    updated_messages = existing_messages + [HumanMessage(content=request.message)]
-    
-    try:
-        # 3. Run the Agent
-        final_state = agent_app.invoke({"messages": updated_messages}, config=config)
-        
-        # 4. Extract text response
-        response_text = "I'm processing that."
-        if final_state.get("needs_user_input"):
-            response_text = final_state.get("validation_question")
-        elif final_state.get("final_itinerary"):
-            response_text = final_state.get("final_itinerary")
-        
-        # 5. Extract Dashboard Stats
-        plan = final_state.get("plan")
-        stats = {
-            "budget": plan.budget if plan else 0,
-            "destination": plan.destination if plan else "Not set",
-            "dates": f"{plan.departure_date} - {plan.arrival_date}" if plan and plan.departure_date else "Not set"
-        }
-        
-        return {
-            "role": "assistant",
-            "content": response_text,
-            "stats": stats
-        }
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
