@@ -93,3 +93,9 @@ class AgentState(BaseModel):
     with_reasoning: Annotated[bool, replace_value] = Field(
         default=True, description="Enable or disable the review step"
     )
+    with_planner: Annotated[bool, replace_value] = Field(
+        default=True, description="Enable or disable the planner"
+    )
+    with_tools: Annotated[bool, replace_value] = Field(
+        default=True, description="Enable or disable the tools"
+    )

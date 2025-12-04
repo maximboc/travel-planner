@@ -23,12 +23,26 @@ def compiler_node(state: AgentState, llm: ChatOllama):
 
     # Context Construction
     flight_context = ""
-    if state.flight_data and state.selected_flight_index is not None and state.selected_flight_index < len(state.flight_data):
-        flight_context = f"Selected Flight: {state.flight_data[state.selected_flight_index]}"
+    if (
+        state.flight_data
+        and state.selected_flight_index is not None
+        and state.selected_flight_index < len(state.flight_data)
+    ):
+        flight_context = (
+            f"Selected Flight: {state.flight_data[state.selected_flight_index]}"
+        )
 
     hotel_context = ""
-    if state.plan.need_hotel and state.hotel_data and state.hotel_data.hotels and state.selected_hotel_index is not None and state.selected_hotel_index < len(state.hotel_data.hotels):
-        hotel_context = f"Selected Hotel: {state.hotel_data.hotels[state.selected_hotel_index]}"
+    if (
+        state.plan.need_hotel
+        and state.hotel_data
+        and state.hotel_data.hotels
+        and state.selected_hotel_index is not None
+        and state.selected_hotel_index < len(state.hotel_data.hotels)
+    ):
+        hotel_context = (
+            f"Selected Hotel: {state.hotel_data.hotels[state.selected_hotel_index]}"
+        )
 
     activity_context = ""
     if state.plan.need_activities and state.activity_data:

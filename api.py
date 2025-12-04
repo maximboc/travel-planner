@@ -12,36 +12,22 @@ from src.graph import create_travel_agent_graph
 from src.states.planner import PlanDetailsState
 
 
-
-
 load_dotenv()
-
 
 
 app = FastAPI(title="Travel Agent API")
 
 
-
 app.add_middleware(
-
     CORSMiddleware,
-
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
-
     allow_credentials=True,
-
     allow_methods=["*"],
-
     allow_headers=["*"],
-
 )
 
 
-
 agent_app = create_travel_agent_graph()
-
-
-
 
 
 class ChatRequest(BaseModel):
@@ -51,17 +37,13 @@ class ChatRequest(BaseModel):
     session_id: str
 
 
-
-
-
 class ConfigureRequest(BaseModel):
 
     session_id: str
 
-    with_reasoning: bool
-
-
-
+    with_reasoning: Optional[bool]
+    with_planner: Optional[bool]
+    with_tools: Optional[bool]
 
 
 class UpdatePlanRequest(BaseModel):
@@ -77,13 +59,8 @@ class UpdatePlanRequest(BaseModel):
     budget: Optional[float] = None
 
 
-
-
-
 @app.post("/chat/update_plan")
-
 async def update_plan(request: UpdatePlanRequest):
-
     """Endpoint to override agent's plan."""
 
     config = {"configurable": {"thread_id": request.session_id}}
@@ -94,62 +71,39 @@ async def update_plan(request: UpdatePlanRequest):
 
         current_plan = current_state.values.get("plan") if current_state else None
 
-
-
         if not current_plan:
 
             current_plan = PlanDetailsState(
-
                 destination=request.destination,
-
                 departure_date=request.departure_date,
-
                 arrival_date=request.arrival_date,
-
                 budget=request.budget,
-
             )
 
         else:
 
             if request.destination is not None:
-
                 current_plan.destination = request.destination
 
             if request.departure_date is not None:
-
                 current_plan.departure_date = request.departure_date
 
             if request.arrival_date is not None:
-
                 current_plan.arrival_date = request.arrival_date
 
             if request.budget is not None:
-
                 current_plan.budget = request.budget
-
-
 
         agent_app.update_state(config, {"plan": current_plan})
 
-        
-
-        # Also send a state update to the client
-
-        updated_state_frontend = serialize_state_for_frontend(agent_app.get_state(config).values)
-
-
-
-
+        updated_state_frontend = serialize_state_for_frontend(
+            agent_app.get_state(config).values
+        )
 
         return {
-
             "status": "success",
-
             "message": "Plan updated successfully",
-
-            "state": updated_state_frontend
-
+            "state": updated_state_frontend,
         }
 
     except Exception as e:
@@ -157,34 +111,28 @@ async def update_plan(request: UpdatePlanRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
-
 @app.post("/chat/configure")
-
 async def configure_chat(request: ConfigureRequest):
-
     """Endpoint to configure agent behavior."""
 
     config = {"configurable": {"thread_id": request.session_id}}
 
     try:
-
-        agent_app.update_state(config, {"with_reasoning": request.with_reasoning})
-
+        agent_app.update_state(
+            config,
+            {
+                "with_reasoning": request.with_reasoning,
+                "with_tools": request.with_tools,
+                "with_planner": request.with_planner,
+            },
+        )
         return {
-
             "status": "success",
-
-            "message": f"Reasoning set to {request.with_reasoning}",
-
+            "message": f"Configuration set to with_reasoning={request.with_reasoning}, with_tools={request.with_tools}, with_planner={request.with_planner}",
         }
 
     except Exception as e:
-
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 def serialize_state_for_frontend(state: dict) -> dict:
@@ -264,7 +212,8 @@ async def stream_agent_events(
 
     # Track if we've sent any assistant response
     assistant_response_sent = False
-    current_assistant_content = ""
+
+    print(snapshot)
 
     try:
         async for event in agent_app.astream_events(
@@ -275,7 +224,7 @@ async def stream_agent_events(
             if event_type == "on_chain_start":
                 name = event.get("name", "")
                 if name in [
-                    "planner",
+                    "planner_agent",
                     "city_resolver",
                     "passenger_agent",
                     "flight_agent",
@@ -289,7 +238,7 @@ async def stream_agent_events(
             elif event_type == "on_chain_end":
                 name = event.get("name", "")
                 if name in [
-                    "planner",
+                    "planner_agent",
                     "city_resolver",
                     "passenger_agent",
                     "flight_agent",
@@ -298,7 +247,6 @@ async def stream_agent_events(
                     "compiler",
                     "reviewer",
                 ]:
-                    # Get current state and send update
                     current_state = agent_app.get_state(config)
                     if current_state.values:
                         frontend_state = serialize_state_for_frontend(
@@ -308,41 +256,22 @@ async def stream_agent_events(
 
                     yield f"data: {json.dumps({'type': 'node_end', 'node': name})}\n\n"
 
-            elif event_type in ["on_llm_stream", "on_chat_model_stream"]:
-                # Stream LLM tokens as they arrive
-                token_data = event.get("data", {})
-                chunk = token_data.get("chunk")
-
-                if chunk:
-                    # Extract content from AIMessageChunk
-                    if hasattr(chunk, "content") and chunk.content:
-                        token_content = chunk.content
-                        current_assistant_content += token_content
-                        yield f"data: {json.dumps({'type': 'token', 'content': token_content})}\n\n"
-                        assistant_response_sent = True
-
-        # After streaming completes, get final state
         final_state = agent_app.get_state(config)
 
         if final_state.values:
             frontend_state = serialize_state_for_frontend(final_state.values)
             yield f"data: {json.dumps({'type': 'state_update', 'state': frontend_state})}\n\n"
 
-            # Handle different completion scenarios
             if final_state.values.get("needs_user_input"):
-                # Agent is asking for more information
                 validation_question = final_state.values.get("validation_question", "")
 
-                # If we already streamed the question, just signal completion
                 if assistant_response_sent:
                     yield f"data: {json.dumps({'type': 'needs_input', 'complete': True, 'content': validation_question})}\n\n"
                 else:
-                    # If no streaming occurred, send the question as a complete message
                     yield f"data: {json.dumps({'type': 'assistant_message', 'content': validation_question})}\n\n"
                     yield f"data: {json.dumps({'type': 'needs_input', 'complete': True, 'content': validation_question})}\n\n"
 
             elif final_state.values.get("final_itinerary"):
-                # Final itinerary is ready
                 response_text = final_state.values.get("final_itinerary")
                 if not assistant_response_sent:
                     yield f"data: {json.dumps({'type': 'assistant_message', 'content': response_text})}\n\n"

@@ -59,18 +59,35 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
 
     plan: PlanDetailsState = state.plan
     try:
-        flight_search_tool = FlightSearchTool(amadeus_auth)
-        flight_results: List[FlightSearchResultState] = flight_search_tool.invoke(
-            {
-                "origin": plan.origin,
-                "destination": plan.destination,
-                "departure_date": plan.departure_date,
-                "return_date": plan.arrival_date,
-                "adults": getattr(state, "adults", 1),
-                "travel_class": getattr(state, "travel_class", "ECONOMY"),
-                "max_results": 3,  # TODO: Make configurable
-            }
-        )
+        if state.with_tools:
+            flight_search_tool = FlightSearchTool(amadeus_auth)
+            flight_results: List[FlightSearchResultState] = flight_search_tool.invoke(
+                {
+                    "origin": plan.origin,
+                    "destination": plan.destination,
+                    "departure_date": plan.departure_date,
+                    "return_date": plan.arrival_date,
+                    "adults": getattr(state, "adults", 1),
+                    "travel_class": getattr(state, "travel_class", "ECONOMY"),
+                    "max_results": 3,  # TODO: Make configurable
+                }
+            )
+        else:
+            print(
+                "   ⚠️ Flight search tool disabled, Using LLM knowledge (may be inaccurate)..."
+            )
+            # Fallback: LLM knowledge (less accurate)
+            flight_search_prompt = f"""
+            Find up to 5 flight options from {plan.origin} to {plan.destination}.
+            Departure date: {plan.departure_date}
+            Return date: {plan.arrival_date}
+            Adults: {getattr(state, "adults", 1)}
+            Travel class: {getattr(state, "travel_class", "ECONOMY")}
+            """
+
+            flight_search_response = llm.invoke(flight_search_prompt).content
+            
+
     except Exception as e:
         print(f"   ⚠️ Flight search error: {e}")
         question = f"I encountered an error searching for flights from {plan.origin} to {plan.destination}. Could you verify your cities and dates are correct? The error was: {str(e)}"

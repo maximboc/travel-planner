@@ -43,23 +43,45 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
 
     if state.hotel_data is None:
         try:
-            search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
-            result: HotelSearchState = search_hotels.invoke(
-                {
-                    "city_code": state.city_code,
-                    "check_in_date": plan.departure_date,
-                    "check_out_date": plan.arrival_date,
-                    "radius": 5,
-                }
-            )
+            if state.with_tools:
+                search_hotels = HotelSearchTool(amadeus_auth=amadeus_auth)
+                result: HotelSearchState = search_hotels.invoke(
+                    {
+                        "city_code": state.city_code,
+                        "check_in_date": plan.departure_date,
+                        "check_out_date": plan.arrival_date,
+                        "radius": 5,
+                    }
+                )
 
-            if not result or not result.hotels or len(result.hotels) == 0:
-                print("   ⚠️ No hotels found via API.")
-                state.needs_user_input = True
-                state.validation_question = "I couldn't find any hotels in that area for those dates. Shall we try a different location?"
-                state.messages.append(AIMessage(content=state.validation_question))
-                state.last_node = "hotel_agent"
-                return state
+                if not result or not result.hotels or len(result.hotels) == 0:
+                    print("   ⚠️ No hotels found via API.")
+                    state.needs_user_input = True
+                    state.validation_question = "I couldn't find any hotels in that area for those dates. Shall we try a different location?"
+                    state.messages.append(AIMessage(content=state.validation_question))
+                    state.last_node = "hotel_agent"
+                    return state
+                else:
+                    state.hotel_data = result
+            else:
+                print("   ℹ️  Tool use disabled, Using LLM Knowledge.")
+                hotel_search_prompt = f"""
+                    You are an expert Travel Concierge. Your task is to find a list of available hotels for a user based on their destination and travel dates.
+                    start_date :{plan.departure_date}
+                    end_date :{plan.arrival_date}
+                    source_city_code :{state.origin_code}
+                    destination_city_code :{state.city_code}
+                    Provide a list of 3 hotels in the destination city with the following details for each hotel
+                """
+                response = llm.invoke(
+                    [
+                        SystemMessage(),
+                        {"role": "user", "content": hotel_search_prompt},
+                    ]
+                )
+                content = response.content
+                hotels = json.loads(content.strip())
+                state.hotel_data = HotelSearchState(city_code=state.origin_code,hotels=hotels)
 
         except Exception as e:
             print(f"   ⚠️ Hotel search error: {e}")
@@ -152,7 +174,12 @@ Return a JSON object containing the index of the selected hotel from the list pr
             print("   ⚠️ No valid hotel selection made.")
 
     print("   ✅ Hotel analysis complete.")
-    if state.selected_hotel_index is not None and state.hotel_data and state.hotel_data.hotels:
+    if (
+        state.selected_hotel_index is not None
+        and state.hotel_data
+        and state.hotel_data.hotels
+    ):
+        # TODO:
         print(
             f"   Selected hotel (Index {state.selected_hotel_index}): {state.hotel_data.hotels[state.selected_hotel_index]}"
         )
