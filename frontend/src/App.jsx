@@ -2,9 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, RotateCcw, Plane, Calendar, DollarSign, MapPin, 
   Hotel, Compass, Sun, Users, CheckCircle2, Loader2, 
-  PanelRight, PanelRightClose, AlertCircle 
+  PanelRight, PanelRightClose, AlertCircle, CheckCircle, XCircle, Edit3, Plus
 } from 'lucide-react';
-
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -13,7 +12,11 @@ export default function App() {
   const [showDetails, setShowDetails] = useState(false);
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState('');
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
-
+  const [withReasoning, setWithReasoning] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editablePlan, setEditablePlan] = useState(null);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  
   const [agentState, setAgentState] = useState({
     plan: null,
     adults: null,
@@ -34,6 +37,56 @@ export default function App() {
   
   const [processingSteps, setProcessingSteps] = useState([]);
   const messagesEndRef = useRef(null);
+
+  const handleReasoningToggle = async (enabled) => {
+    setWithReasoning(enabled);
+    try {
+      await fetch('http://127.0.0.1:8000/chat/configure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          with_reasoning: enabled,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to configure reasoning:', error);
+    }
+  };
+
+  const handleEdit = () => {
+    setEditablePlan({ ...agentState.plan });
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditablePlan(null);
+  };
+
+  const handleUpdatePlan = async () => {
+    if (!editablePlan) return;
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/chat/update_plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          ...editablePlan,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to update plan');
+
+      const data = await res.json();
+      setAgentState(prev => ({ ...prev, ...data.state }));
+      setIsEditing(false);
+      setEditablePlan(null);
+    } catch (error) {
+      console.error('Failed to update plan:', error);
+    }
+  };
 
   const resetAll = () => {
     setMessages([]);
@@ -127,15 +180,12 @@ export default function App() {
                 ));
                 
               } else if (data.type === 'state_update') {
-                // Update agent state with new data
                 setAgentState(prev => ({ ...prev, ...data.state }));
                 
               } else if (data.type === 'token') {
-                // Stream tokens as they arrive
                 setCurrentStreamingMessage(prev => prev + data.content);
                 
               } else if (data.type === 'assistant_message') {
-                // Complete message received (non-streamed)
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: data.content,
@@ -145,9 +195,7 @@ export default function App() {
                 setCurrentStreamingMessage('');
                 
               } else if (data.type === 'needs_input') {
-                // Agent needs user input
                 if (currentStreamingMessage) {
-                  // Finalize the streaming message as needing input
                   setMessages(prev => [...prev, {
                     role: 'assistant',
                     content: currentStreamingMessage,
@@ -165,7 +213,6 @@ export default function App() {
                 setAwaitingUserInput(true);
                 
               } else if (data.type === 'final_itinerary') {
-                // Final itinerary complete
                 if (currentStreamingMessage) {
                   setMessages(prev => [...prev, {
                     role: 'assistant',
@@ -177,7 +224,6 @@ export default function App() {
                 setAwaitingUserInput(false);
                 
               } else if (data.type === 'complete') {
-                // General completion
                 if (currentStreamingMessage) {
                   setMessages(prev => [...prev, {
                     role: 'assistant',
@@ -204,7 +250,7 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { 
+      setMessages(prev => [...prev, {
         role: 'assistant', 
         content: "⚠️ I'm having trouble connecting to the server. Is the Python backend running?",
         isError: true
@@ -278,11 +324,7 @@ export default function App() {
               
               <button 
                 onClick={() => setShowDetails(!showDetails)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  showDetails 
-                    ? 'bg-purple-100 text-purple-700 border border-purple-200' 
-                    : 'bg-white text-gray-600 border border-gray-200 hover:border-purple-300'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${showDetails ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-white text-gray-600 border border-gray-200 hover:border-purple-300'}`}
               >
                 {showDetails ? (
                   <>
@@ -304,7 +346,6 @@ export default function App() {
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className={`grid grid-cols-1 ${showDetails ? 'lg:grid-cols-3' : ''} gap-6`}>
           
-          {/* Main Chat Area */}
           <div className={showDetails ? 'lg:col-span-2' : 'w-full'}>
             {messages.length === 0 && (
               <div className="mb-8">
@@ -347,17 +388,7 @@ export default function App() {
                         className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[85%] rounded-2xl px-6 py-4 shadow-sm ${
-                            msg.role === 'user'
-                              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-tr-none'
-                              : msg.isFinal
-                              ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-gray-800 border-2 border-green-200 rounded-tl-none'
-                              : msg.isError
-                              ? 'bg-red-50 text-red-800 border border-red-200 rounded-tl-none'
-                              : msg.needsInput
-                              ? 'bg-blue-50 text-gray-800 border-2 border-blue-300 rounded-tl-none'
-                              : 'bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none'
-                          }`}
+                          className={`max-w-[85%] rounded-2xl px-6 py-4 shadow-sm ${msg.role === 'user' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-tr-none' : msg.isFinal ? 'bg-gradient-to-r from-green-50 to-emerald-50 text-gray-800 border-2 border-green-200 rounded-tl-none' : msg.isError ? 'bg-red-50 text-red-800 border border-red-200 rounded-tl-none' : msg.needsInput ? 'bg-blue-50 text-gray-800 border-2 border-blue-300 rounded-tl-none' : 'bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none'}`}
                         >
                           {msg.isFinal && (
                             <div className="flex items-center gap-2 mb-2 text-green-600 font-semibold text-sm">
@@ -376,7 +407,6 @@ export default function App() {
                       </div>
                     ))}
 
-                    {/* Current streaming message */}
                     {currentStreamingMessage && (
                       <div className="flex justify-start">
                         <div className="max-w-[85%] rounded-2xl px-6 py-4 shadow-sm bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none">
@@ -415,8 +445,57 @@ export default function App() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="border-t border-purple-100 p-4 bg-gray-50/50">
+              <div className="border-t border-purple-100 p-4 bg-gray-50/50 relative">
+                
+                {showOptionsMenu && (
+                  <div className="absolute bottom-full left-0 right-0 p-4 bg-white border-t border-x border-purple-100 rounded-t-xl shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Agent Reasoning</label>
+                        <div className="flex rounded-lg border border-gray-200 p-1">
+                          <button
+                            onClick={() => handleReasoningToggle(true)}
+                            className={`flex-1 flex items-center justify-center gap-2 text-sm px-3 py-1.5 rounded-md transition-all ${
+                              withReasoning ? 'bg-purple-600 text-white shadow' : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Enabled
+                          </button>
+                          <button
+                            onClick={() => handleReasoningToggle(false)}
+                            className={`flex-1 flex items-center justify-center gap-2 text-sm px-3 py-1.5 rounded-md transition-all ${
+                              !withReasoning ? 'bg-red-600 text-white shadow' : 'bg-transparent text-gray-600 hover:bg-gray-100'
+                            }`}
+                          >
+                            <XCircle className="w-4 h-4" />
+                            Disabled
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Session</label>
+                        <button
+                          onClick={resetAll}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg"
+                          title="Reset conversation"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Reset Conversation
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                    className={`p-4 border rounded-xl transition-all ${showOptionsMenu ? 'bg-purple-100 border-purple-300 text-purple-600' : 'bg-white border-purple-200 text-gray-500 hover:border-purple-400'}`}
+                    title="Options"
+                  >
+                    <Plus className={`w-5 h-5 transition-transform ${showOptionsMenu ? 'rotate-45' : ''}`} />
+                  </button>
                   <input
                     type="text"
                     value={input}
@@ -434,13 +513,6 @@ export default function App() {
                     <Send className="w-5 h-5" />
                     <span className="hidden sm:inline">Send</span>
                   </button>
-                  <button
-                    onClick={resetAll}
-                    className="px-3 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg"
-                    title="Reset conversation"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
                 </div>
                 <p className="text-xs text-center text-gray-400 mt-2">
                   Session: <span className="font-mono">{sessionId.slice(-6)}</span> • Powered by Amadeus & LangGraph
@@ -449,65 +521,115 @@ export default function App() {
             </div>
           </div>
 
-          {/* State Sidebar */}
           {showDetails && (
             <div className="lg:col-span-1">
               <div className="bg-white rounded-2xl shadow-lg border border-purple-100 p-6 sticky top-24 animate-in slide-in-from-right-10 duration-300">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-purple-600" />
-                    Trip Details
-                  </h2>
-                </div>
-
-                {!hasState ? (
-                  <p className="text-sm text-gray-500 italic">Details will appear as you chat...</p>
-                ) : (
-                  <div className="space-y-4">
-                    {plan && (
-                      <>
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <MapPin className="w-5 h-5 text-blue-600" />
-                            <span className="text-xs font-semibold text-blue-900 uppercase">Destination</span>
-                          </div>
-                          <p className="font-bold text-gray-800">{plan.destination || '---'}</p>
-                          {agentState.city_code && (
-                            <p className="text-xs text-gray-600 mt-1">Code: {agentState.city_code}</p>
-                          )}
-                        </div>
-
-                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Calendar className="w-5 h-5 text-purple-600" />
-                            <span className="text-xs font-semibold text-purple-900 uppercase">Dates</span>
-                          </div>
-                          <p className="text-sm font-medium text-gray-800">
-                            {plan.departure_date ? `${plan.departure_date}` : '---'}
-                          </p>
-                          {plan.arrival_date && (
-                            <p className="text-sm font-medium text-gray-800 mt-1">to {plan.arrival_date}</p>
-                          )}
-                        </div>
-
-                        <div className="bg-pink-50 p-4 rounded-xl border border-pink-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <DollarSign className="w-5 h-5 text-pink-600" />
-                            <span className="text-xs font-semibold text-pink-900 uppercase">Budget</span>
-                          </div>
-                          <p className="font-bold text-gray-800">${plan.budget || 0}</p>
-                        </div>
-                      </>
-                    )}
-
-                    {(agentState.adults || agentState.children || agentState.infants) && (
+                                    <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                      <MapPin className="w-5 h-5 text-purple-600" />
+                                      Trip Details
+                                    </h2>
+                                                      {plan && !isEditing && (
+                                                        <button onClick={handleEdit} className="text-purple-600 hover:text-purple-800">
+                                                          <Edit3 className="w-4 h-4" />
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                    
+                                                    {!hasState ? (                                    <p className="text-sm text-gray-500 italic">Details will appear as you chat...</p>
+                                  ) : (
+                                    <div className="space-y-4">
+                                      {isEditing ? (
+                                        <div className="space-y-4">
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-600">Destination</label>
+                                            <input
+                                              type="text"
+                                              value={editablePlan.destination || ''}
+                                              onChange={(e) => setEditablePlan({...editablePlan, destination: e.target.value})}
+                                              className="w-full mt-1 p-2 border border-gray-300 rounded-lg"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-600">Departure Date</label>
+                                            <input
+                                              type="text"
+                                              value={editablePlan.departure_date || ''}
+                                              onChange={(e) => setEditablePlan({...editablePlan, departure_date: e.target.value})}
+                                              className="w-full mt-1 p-2 border border-gray-300 rounded-lg"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-600">Arrival Date</label>
+                                            <input
+                                              type="text"
+                                              value={editablePlan.arrival_date || ''}
+                                              onChange={(e) => setEditablePlan({...editablePlan, arrival_date: e.target.value})}
+                                              className="w-full mt-1 p-2 border border-gray-300 rounded-lg"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-xs font-semibold text-gray-600">Budget</label>
+                                            <input
+                                              type="number"
+                                              value={editablePlan.budget || ''}
+                                              onChange={(e) => setEditablePlan({...editablePlan, budget: parseFloat(e.target.value)})}
+                                              className="w-full mt-1 p-2 border border-gray-300 rounded-lg"
+                                            />
+                                          </div>
+                                          <div className="flex gap-2">
+                                            <button onClick={handleUpdatePlan} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg">Save</button>
+                                            <button onClick={handleCancelEdit} className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg">Cancel</button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          {plan && (
+                                            <>
+                                              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <MapPin className="w-5 h-5 text-blue-600" />
+                                                  <span className="text-xs font-semibold text-blue-900 uppercase">Destination</span>
+                                                </div>
+                                                <p className="font-bold text-gray-800">{plan.destination || '---'}</p>
+                                                {agentState.city_code && (
+                                                  <p className="text-xs text-gray-600 mt-1">Code: {agentState.city_code}</p>
+                                                )}
+                                              </div>
+                  
+                                              <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <Calendar className="w-5 h-5 text-purple-600" />
+                                                  <span className="text-xs font-semibold text-purple-900 uppercase">Dates</span>
+                                                </div>
+                                                <p className="text-sm font-medium text-gray-800">
+                                                  {plan.departure_date ? `${plan.departure_date}` : '---'}
+                                                </p>
+                                                {plan.arrival_date && (
+                                                  <p className="text-sm font-medium text-gray-800 mt-1">to {plan.arrival_date}</p>
+                                                )}
+                                              </div>
+                  
+                                              <div className="bg-pink-50 p-4 rounded-xl border border-pink-100">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <DollarSign className="w-5 h-5 text-pink-600" />
+                                                  <span className="text-xs font-semibold text-pink-900 uppercase">Budget</span>
+                                                </div>
+                                                <p className="font-bold text-gray-800">${plan.budget || 0}</p>
+                                              </div>
+                                            </>
+                                          )}
+                                        </>
+                                      )}
+                  
+                    {(agentState.adults > 0 || agentState.children > 0 || agentState.infants > 0) && !isEditing && (
                       <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
                         <div className="flex items-center gap-2 mb-2">
                           <Users className="w-5 h-5 text-orange-600" />
                           <span className="text-xs font-semibold text-orange-900 uppercase">Passengers</span>
                         </div>
                         <div className="space-y-1 text-sm text-gray-700">
-                          {agentState.adults && <p>Adults: {agentState.adults}</p>}
+                          {agentState.adults > 0 && <p>Adults: {agentState.adults}</p>}
                           {agentState.children > 0 && <p>Children: {agentState.children}</p>}
                           {agentState.infants > 0 && <p>Infants: {agentState.infants}</p>}
                           {agentState.travel_class && (
@@ -517,20 +639,28 @@ export default function App() {
                       </div>
                     )}
 
-                    {agentState.flight_data && agentState.flight_data.length > 0 && (
+                    {agentState.flight_data && agentState.flight_data.length > 0 && !isEditing && (
                       <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100">
                         <div className="flex items-center gap-2 mb-2">
                           <Plane className="w-5 h-5 text-cyan-600" />
                           <span className="text-xs font-semibold text-cyan-900 uppercase">Flights Found</span>
                         </div>
-                        <p className="font-bold text-gray-800">{agentState.flight_data.length} options</p>
+                        <div className="space-y-2">
+                          {agentState.flight_data.map((f, i) => (
+                            <div key={i} className="text-sm p-2 bg-white/50 rounded-lg">
+                              <p className="font-bold">{f.price} {f.currency}</p>
+                              <p className="text-xs">Depart: {new Date(f.departure_time).toLocaleString()}</p>
+                              <p className="text-xs">Arrive: {new Date(f.arrival_time).toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
                         {agentState.selected_flight_index !== null && (
                           <p className="text-xs text-gray-600 mt-1">Selected: Option {agentState.selected_flight_index + 1}</p>
                         )}
                       </div>
                     )}
 
-                    {agentState.hotel_data && agentState.hotel_data.hotels && agentState.hotel_data.hotels.length > 0 && (
+                    {agentState.hotel_data && agentState.hotel_data.hotels && agentState.hotel_data.hotels.length > 0 && !isEditing && (
                       <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                         <div className="flex items-center gap-2 mb-2">
                           <Hotel className="w-5 h-5 text-emerald-600" />

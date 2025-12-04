@@ -16,7 +16,7 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     print("\n🏨 HOTEL AGENT: Searching...")
     plan: PlanDetailsState | None = state.plan
 
-    if not plan or state.needs_user_input:
+    if not plan or (state.needs_user_input and state.last_node != "hotel_agent"):
         print("No plan found or awaiting user input, cannot search hotels.")
         return state
 
@@ -145,16 +145,17 @@ Return a JSON object containing the index of the selected hotel from the list pr
         if selected_index:
             state.selected_hotel_index = selected_index
             print(
-                f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data[selected_index]}"
+                f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
             )
         else:
             state.hotel_data = []
             print("   ⚠️ No valid hotel selection made.")
 
     print("   ✅ Hotel analysis complete.")
-    print(
-        f"   Selected hotel (Index {state.selected_hotel_index}): {state.hotel_data[state.selected_hotel_index]}"
-    )
+    if state.selected_hotel_index is not None and state.hotel_data and state.hotel_data.hotels:
+        print(
+            f"   Selected hotel (Index {state.selected_hotel_index}): {state.hotel_data.hotels[state.selected_hotel_index]}"
+        )
 
     state.last_node = None
     state.needs_user_input = False

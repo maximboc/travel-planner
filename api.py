@@ -4,30 +4,188 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from dotenv import load_dotenv
 import uvicorn
 
 from src.graph import create_travel_agent_graph
+from src.states.planner import PlanDetailsState
+
+
+
 
 load_dotenv()
 
+
+
 app = FastAPI(title="Travel Agent API")
 
+
+
 app.add_middleware(
+
     CORSMiddleware,
+
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
+
 )
+
+
 
 agent_app = create_travel_agent_graph()
 
 
+
+
+
 class ChatRequest(BaseModel):
+
     message: str
+
     session_id: str
+
+
+
+
+
+class ConfigureRequest(BaseModel):
+
+    session_id: str
+
+    with_reasoning: bool
+
+
+
+
+
+class UpdatePlanRequest(BaseModel):
+
+    session_id: str
+
+    destination: Optional[str] = None
+
+    departure_date: Optional[str] = None
+
+    arrival_date: Optional[str] = None
+
+    budget: Optional[float] = None
+
+
+
+
+
+@app.post("/chat/update_plan")
+
+async def update_plan(request: UpdatePlanRequest):
+
+    """Endpoint to override agent's plan."""
+
+    config = {"configurable": {"thread_id": request.session_id}}
+
+    try:
+
+        current_state = agent_app.get_state(config)
+
+        current_plan = current_state.values.get("plan") if current_state else None
+
+
+
+        if not current_plan:
+
+            current_plan = PlanDetailsState(
+
+                destination=request.destination,
+
+                departure_date=request.departure_date,
+
+                arrival_date=request.arrival_date,
+
+                budget=request.budget,
+
+            )
+
+        else:
+
+            if request.destination is not None:
+
+                current_plan.destination = request.destination
+
+            if request.departure_date is not None:
+
+                current_plan.departure_date = request.departure_date
+
+            if request.arrival_date is not None:
+
+                current_plan.arrival_date = request.arrival_date
+
+            if request.budget is not None:
+
+                current_plan.budget = request.budget
+
+
+
+        agent_app.update_state(config, {"plan": current_plan})
+
+        
+
+        # Also send a state update to the client
+
+        updated_state_frontend = serialize_state_for_frontend(agent_app.get_state(config).values)
+
+
+
+
+
+        return {
+
+            "status": "success",
+
+            "message": "Plan updated successfully",
+
+            "state": updated_state_frontend
+
+        }
+
+    except Exception as e:
+
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+@app.post("/chat/configure")
+
+async def configure_chat(request: ConfigureRequest):
+
+    """Endpoint to configure agent behavior."""
+
+    config = {"configurable": {"thread_id": request.session_id}}
+
+    try:
+
+        agent_app.update_state(config, {"with_reasoning": request.with_reasoning})
+
+        return {
+
+            "status": "success",
+
+            "message": f"Reasoning set to {request.with_reasoning}",
+
+        }
+
+    except Exception as e:
+
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 
 def serialize_state_for_frontend(state: dict) -> dict:
     """Convert state to JSON-serializable format for frontend"""
@@ -98,7 +256,7 @@ async def stream_agent_events(
 ) -> AsyncGenerator[str, None]:
     """Stream events from LangGraph execution"""
 
-    config = {"configurable": {"thread_id": session_id }}
+    config = {"configurable": {"thread_id": session_id}}
 
     snapshot = agent_app.get_state(config)
     existing_messages = snapshot.values.get("messages", []) if snapshot.values else []
@@ -154,7 +312,7 @@ async def stream_agent_events(
                 # Stream LLM tokens as they arrive
                 token_data = event.get("data", {})
                 chunk = token_data.get("chunk")
-                
+
                 if chunk:
                     # Extract content from AIMessageChunk
                     if hasattr(chunk, "content") and chunk.content:
@@ -174,7 +332,7 @@ async def stream_agent_events(
             if final_state.values.get("needs_user_input"):
                 # Agent is asking for more information
                 validation_question = final_state.values.get("validation_question", "")
-                
+
                 # If we already streamed the question, just signal completion
                 if assistant_response_sent:
                     yield f"data: {json.dumps({'type': 'needs_input', 'complete': True, 'content': validation_question})}\n\n"
@@ -189,7 +347,7 @@ async def stream_agent_events(
                 if not assistant_response_sent:
                     yield f"data: {json.dumps({'type': 'assistant_message', 'content': response_text})}\n\n"
                 yield f"data: {json.dumps({'type': 'final_itinerary', 'complete': True})}\n\n"
-                
+
             else:
                 # Default completion
                 if not assistant_response_sent:
@@ -200,17 +358,18 @@ async def stream_agent_events(
                         if hasattr(msg, "type") and msg.type == "ai":
                             last_message = msg.content
                             break
-                    
+
                     if last_message:
                         yield f"data: {json.dumps({'type': 'assistant_message', 'content': last_message})}\n\n"
                     else:
                         yield f"data: {json.dumps({'type': 'assistant_message', 'content': 'Processing complete.'})}\n\n"
-                
+
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
     except Exception as e:
         print(f"Error in stream: {e}")
         import traceback
+
         traceback.print_exc()
         error_msg = f"⚠️ Error: {str(e)}"
         yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
@@ -230,6 +389,7 @@ async def chat_stream_endpoint(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

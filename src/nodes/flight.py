@@ -53,7 +53,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         )
         return state
 
-    if state.needs_user_input or not state.plan:
+    if state.needs_user_input and state.last_node != "flight_agent" or not state.plan:
         print("No plan found or awaiting user input, cannot search flights.")
         return state
 
