@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
+import json
 
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
 from src.tools import FlightSearchTool, AmadeusAuth
@@ -57,6 +58,8 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         print("No plan found or awaiting user input, cannot search flights.")
         return state
 
+    flight_results: List[FlightSearchResultState] = []
+
     plan: PlanDetailsState = state.plan
     try:
         if state.with_tools:
@@ -76,17 +79,78 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
             print(
                 "   ⚠️ Flight search tool disabled, Using LLM knowledge (may be inaccurate)..."
             )
-            # Fallback: LLM knowledge (less accurate)
             flight_search_prompt = f"""
-            Find up to 5 flight options from {plan.origin} to {plan.destination}.
-            Departure date: {plan.departure_date}
-            Return date: {plan.arrival_date}
-            Adults: {getattr(state, "adults", 1)}
-            Travel class: {getattr(state, "travel_class", "ECONOMY")}
+You are a flight search assistant. Generate realistic flight options based on the following criteria:
+
+Origin: {plan.origin}
+Destination: {plan.destination}
+Departure date: {plan.departure_date}
+Return date: {plan.arrival_date}
+Adults: {getattr(state, "adults", 1)}
+Travel class: {getattr(state, "travel_class", "ECONOMY")}
+
+Generate 3-5 realistic flight options. For each flight offer, provide:
+- A realistic price in USD (consider distance, travel class, and dates)
+- Round-trip itineraries (outbound and return)
+- For each segment include: departure/arrival airports (IATA codes), departure/arrival times (ISO 8601 format), duration, airline (IATA code), and number of stops
+
+Return ONLY a valid JSON array with this exact structure (no markdown, no additional text):
+
+[
+{{
+    "price": "450.00",
+    "currency": "USD",
+    "itineraries": [
+    {{
+        "segments": [
+        {{
+            "departure_airport": "JFK",
+            "arrival_airport": "LAX",
+            "departure_time": "2024-03-15T08:00:00",
+            "arrival_time": "2024-03-15T11:30:00",
+            "duration": "PT5H30M",
+            "airline": "AA",
+            "stops": 0
+        }}
+        ]
+    }},
+    {{
+        "segments": [
+        {{
+            "departure_airport": "LAX",
+            "arrival_airport": "JFK",
+            "departure_time": "2024-03-20T14:00:00",
+            "arrival_time": "2024-03-20T22:30:00",
+            "duration": "PT5H30M",
+            "airline": "AA",
+            "stops": 0
+        }}
+        ]
+    }}
+    ]
+}}
+]
+
+Ensure dates align with the requested departure ({plan.departure_date}) and return ({plan.arrival_date}) dates.
             """
 
             flight_search_response = llm.invoke(flight_search_prompt).content
-            
+
+            try:
+                response_clean = flight_search_response.strip()
+                if response_clean.startswith("```"):
+                    response_clean = response_clean.split("```")[1]
+                    if response_clean.startswith("json"):
+                        response_clean = response_clean[4:]
+                response_clean = response_clean.strip()
+
+                flight_data = json.loads(response_clean)
+                flight_results = [
+                    FlightSearchResultState(**flight) for flight in flight_data
+                ]
+            except (json.JSONDecodeError, Exception) as e:
+                print(f"   ⚠️ Failed to parse LLM flight response: {e}")
+                flight_results = []
 
     except Exception as e:
         print(f"   ⚠️ Flight search error: {e}")
@@ -110,7 +174,8 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
 
     flight_results_str = format_flights_for_llm_compact(flight_results)
 
-    filtering_prompt = f"""Analyze these flights and filter to the top 3 viable options.
+    filtering_prompt = f"""
+Analyze these flights and filter to the top 3 viable options.
 
 Budget: ${plan.remaining_budget}
 Flights:

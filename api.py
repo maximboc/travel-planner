@@ -159,6 +159,9 @@ def serialize_state_for_frontend(state: dict) -> dict:
         "origin_code",
         "selected_flight_index",
         "selected_hotel_index",
+        "with_tools",
+        "with_reasoning",
+        "with_planner",
     ]:
         if field in state and state[field] is not None:
             frontend_state[field] = state[field]
@@ -210,7 +213,6 @@ async def stream_agent_events(
     existing_messages = snapshot.values.get("messages", []) if snapshot.values else []
     updated_messages = existing_messages + [HumanMessage(content=message)]
 
-    # Track if we've sent any assistant response
     assistant_response_sent = False
 
     print(snapshot)
@@ -278,9 +280,7 @@ async def stream_agent_events(
                 yield f"data: {json.dumps({'type': 'final_itinerary', 'complete': True})}\n\n"
 
             else:
-                # Default completion
                 if not assistant_response_sent:
-                    # Get the last assistant message if available
                     messages = final_state.values.get("messages", [])
                     last_message = None
                     for msg in reversed(messages):

@@ -34,9 +34,9 @@ export default function App() {
 
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState("");
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
-  const [withReasoning, setWithReasoning] = useState(false);
+  const [withReasoning, setWithReasoning] = useState(true);
   const [withTools, setWithTools] = useState(true);
-  const [withPlanner, setWithPlanner] = useState(false);
+  const [withPlanner, setWithPlanner] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editablePlan, setEditablePlan] = useState(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -56,7 +56,7 @@ export default function App() {
           session_id: sessionId,
           with_reasoning: enabled,
           with_planner: withPlanner,
-          with_reasoning: withReasoning
+          with_tools: withTools
         }),
       });
     } catch (error) {
@@ -161,6 +161,29 @@ export default function App() {
     scrollToBottom();
   }, [messages, processingSteps, currentStreamingMessage]);
 
+  useEffect(() => {
+    const syncInitialConfiguration = async () => {
+      try {
+        await fetch("http://127.0.0.1:8000/chat/configure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            with_reasoning: withReasoning, // sends default false
+            with_planner: withPlanner,     // sends default false
+            with_tools: withTools          // sends default true
+          }),
+        });
+        console.log("Initial configuration synced");
+      } catch (error) {
+        console.error("Failed to sync initial config:", error);
+      }
+    };
+
+    syncInitialConfiguration();
+    // We run this when sessionId changes to ensure new sessions get configured
+  }, [sessionId]);
+  
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
 
