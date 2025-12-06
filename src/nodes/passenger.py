@@ -22,31 +22,54 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
         )
         return state
 
-    if state.needs_user_input or not state.plan:
+    if (
+        state.needs_user_input and state.last_node != "passenger_agent"
+    ) or not state.plan:
         print("No plan found or awaiting user input, cannot analyze passengers.")
         return state
 
     messages = state.messages
-    last_message = messages[-1] if messages else None
 
-    system_msg = """Extract passenger information. If unclear, return null values.
-    
-    Return JSON:
-    {
-        "adults": null or number,
-        "children": null or number,
-        "infants": null or number,
-        "travel_class": null or "ECONOMY"/"BUSINESS"/"FIRST",
-        "confidence": "high/medium/low"
-    }"""
+    PROMPT = f'''Your task: **Extract passenger information**. If unclear, return null values.
 
-    response = llm.invoke([SystemMessage(content=system_msg)] + [last_message])
+----------------------------
+USER MESSAGE
+----------------------------
+{messages[-1].content}
+
+----------------------------
+YOUR RESPONSE (STRICT JSON)
+----------------------------
+Return JSON:
+{{
+    "adults": null or number,
+    "children": null or number,
+    "infants": null or number,
+    "travel_class": null or "ECONOMY"/"BUSINESS"/"FIRST",
+    "confidence": "high/medium/low"
+}}'''
+
+    response = llm.invoke(
+        [
+            SystemMessage(content="You are a passenger extractor expert"),
+            {"role": "user", "content": PROMPT},
+        ]
+    )
     content = (
         response.content if isinstance(response.content, str) else str(response.content)
     )
 
     try:
         json_start = content.find("{")
+        if json_start == -1:
+            question = "How many people will be traveling? Please specify adults, children (2-11 years), and infants (under 2) if applicable."
+            state.needs_user_input = True
+            state.validation_question = question
+            state.messages.append(AIMessage(content=question))
+            state.last_node = "passenger_agent"
+            print(f"   ❓ No JSON found, need clarification: {question}")
+            return Command(goto="compiler", update=state)
+
         json_end = content.rfind("}") + 1
         passenger_data = json.loads(content[json_start:json_end])
 

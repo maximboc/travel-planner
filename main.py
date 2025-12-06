@@ -16,7 +16,9 @@ def main(app):
     state = AgentState()
     print(f"📋 Scenario ID: {scenario_id}")
 
-    cost_tracker = TokenUsageTracker(scenario_id=scenario_id, model_name="llama3.1:8b")
+    cost_tracker = TokenUsageTracker(
+        scenario_id=scenario_id, model_name="ministral-3:8b"
+    )  # llama3.1:8b")
     config = {
         "configurable": {"thread_id": thread_id},
         "callbacks": [cost_tracker],

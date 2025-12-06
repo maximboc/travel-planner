@@ -117,12 +117,12 @@ Return ONLY the JSON object.
     if not plan_data.get("budget"):
         missing_fields.append("budget")
 
-    try :
+    try:
         budget = float(plan_data.get("budget")) if plan_data.get("budget") else None
     except ValueError:
         budget = None
         missing_fields.append("valid budget amount")
-    
+
     try:
         plan_data["interests"] = str(plan_data.get("interests", ""))
     except ValueError:

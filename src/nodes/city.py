@@ -4,7 +4,6 @@ from langsmith import traceable
 from langgraph.types import Command
 from src.tools import CitySearchTool, AmadeusAuth
 
-# Ensure CitySearchResult is importable or just rely on object properties
 from src.states import AgentState, PlanDetailsState
 
 
@@ -24,16 +23,16 @@ def city_resolver_node(
         clean_name = location_name.split(",")[0].strip()
         print(f"Resolving code for: {clean_name}...")
 
-        # 1. Try the Tool first
-        search_result = city_search.invoke({"keyword": clean_name, "subType": "CITY"})
+        if state.with_tools:
+            search_result = city_search.invoke(
+                {"keyword": clean_name, "subType": "CITY"}
+            )
 
-        # 2. Check if Tool succeeded (It returns an object if success, None if fail)
-        if search_result:
-            print(f"   ✅ API Found: {search_result.iata_code}")
-            return search_result.iata_code, True
+            if search_result:
+                print(f"   ✅ API Found: {search_result.iata_code}")
+                return search_result.iata_code, True
 
-        # 3. Fallback: API failed, ask LLM directly
-        print("   ⚠️ API returned null. Falling back to LLM knowledge...")
+            print("   ⚠️ API returned null. Falling back to LLM knowledge...")
 
         fallback_prompt = f"""
         The flight search API could not find a code for "{location_name}".
@@ -45,16 +44,13 @@ def city_resolver_node(
 
         code = llm.invoke(fallback_prompt).content.strip().upper()
 
-        # Validate LLM response
         if len(code) == 3 and code.isalpha() and code != "UNKNOWN":
             print(f"   🤖 LLM Resolved: {code}")
             return code, True
 
-        # 4. Final Fail
         print(f"   ❌ Could not resolve code for {clean_name}")
         return "", False
 
-    # --- Execution ---
     origin_code, origin_success = resolve_iata(plan.origin, "origin")
 
     if not origin_success:
