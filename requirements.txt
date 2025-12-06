@@ -10,3 +10,5 @@ typing_extensions
 pytest
 ruff
 black
+fastapi
+uvicorn

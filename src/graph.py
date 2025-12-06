@@ -50,6 +50,11 @@ def create_travel_agent_graph():
             return "activity_agent"
         return "compiler"
 
+    def route_after_compiler(state: AgentState):
+        if state.with_reasoning:
+            return "reviewer"
+        return END
+
     # Build Graph
     workflow = StateGraph(AgentState)
     workflow.add_node("planner_agent", functools.partial(planner_node, llm=llm))
@@ -84,7 +89,9 @@ def create_travel_agent_graph():
         "hotel_agent", route_after_hotel, ["activity_agent", "compiler"]
     )
     workflow.add_edge("activity_agent", "compiler")
-    workflow.add_edge("compiler", "reviewer")
+    workflow.add_conditional_edges(
+        "compiler", route_after_compiler, {"reviewer": "reviewer", END: END}
+    )
     workflow.add_conditional_edges(
         "reviewer", check_review_condition_node, {"compiler": "compiler", END: END}
     )

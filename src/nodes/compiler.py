@@ -22,15 +22,41 @@ def compiler_node(state: AgentState, llm: ChatOllama):
         return state
 
     # Context Construction
+    flight_context = ""
+    if (
+        state.flight_data
+        and state.selected_flight_index is not None
+        and state.selected_flight_index < len(state.flight_data)
+    ):
+        flight_context = (
+            f"Selected Flight: {state.flight_data[state.selected_flight_index]}"
+        )
+
+    hotel_context = ""
+    if (
+        state.plan.need_hotel
+        and state.hotel_data
+        and state.hotel_data.hotels
+        and state.selected_hotel_index is not None
+        and state.selected_hotel_index < len(state.hotel_data.hotels)
+    ):
+        hotel_context = (
+            f"Selected Hotel: {state.hotel_data.hotels[state.selected_hotel_index]}"
+        )
+
+    activity_context = ""
+    if state.plan.need_activities and state.activity_data:
+        activity_context = f"Activities: {state.activity_data}"
+
     context = f"""
     Destination: {state.plan.destination}
     Dates: {state.plan.departure_date} to {state.plan.arrival_date}
     Remaining Budget: ${state.plan.remaining_budget}
     Travelers: {state.adults} Adults, {state.children} Children, {state.infants} Infants, Class: {state.travel_class}
 
-    {"" if state.selected_flight_index is not None else f"Flight Options: {state.flight_data[state.selected_flight_index]}"}
-    {"" if not state.plan.need_hotel else f"Hotel Options: {state.hotel_data[state.selected_hotel_index]}"}
-    {"" if not state.plan.need_activities else f"Activities: {state.activity_data}"}
+    {flight_context}
+    {hotel_context}
+    {activity_context}
 
     {feedback_context}
     """
