@@ -328,30 +328,44 @@ export const TripDetailsSidebar = ({
               {agentState.activity_data &&
                 agentState.activity_data.length > 0 && (
                   <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <Compass className="w-5 h-5 text-yellow-600" />
                       <span className="text-xs font-semibold text-yellow-900 uppercase">
-                        Activities
+                        Activities Found
                       </span>
                     </div>
-                    {/* Replaced simple count with map loop */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {agentState.activity_data.map((a, i) => (
                         <div
                           key={i}
-                          className="text-sm p-2 bg-white/50 rounded-lg"
+                          className="group relative bg-white/60 hover:bg-white border border-yellow-100 hover:border-yellow-300 p-3 rounded-xl transition-all duration-200"
                         >
-                          <p className="font-bold truncate">{a.name}</p>
-                          {/* Try description or short_description depending on what backend sends */}
-                          {(a.description || a.short_description) && (
-                            <p className="text-xs text-gray-600 line-clamp-2 mt-1">
-                              {a.description || a.short_description}
+                          <div className="flex justify-between items-start gap-2">
+                            <h4 className="font-bold text-gray-800 text-sm leading-tight">
+                              {a.name}
+                            </h4>
+                            {a.price && (
+                              <span className="shrink-0 text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-1 rounded-md">
+                                {a.price}
+                              </span>
+                            )}
+                          </div>
+
+                          {a.description && (
+                            <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
+                              {a.description}
                             </p>
                           )}
-                          {a.price && (
-                            <p className="text-xs font-semibold text-yellow-700 mt-1">
-                              {a.price}
-                            </p>
+
+                          {a.booking_link && (
+                            <a
+                              href={a.booking_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-3 flex items-center justify-center w-full py-1.5 text-xs font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors border border-yellow-200 hover:border-yellow-300"
+                            >
+                              Book Activity
+                            </a>
                           )}
                         </div>
                       ))}

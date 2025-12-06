@@ -199,10 +199,13 @@ def serialize_state_for_frontend(state: dict) -> dict:
                 frontend_state["hotel_data"]["hotels"].append(hotel_dict)
 
     if state.get("activity_data"):
+        # We explicitly extract fields defined in ActivityResultState
         frontend_state["activity_data"] = [
             {
                 "name": getattr(a, "name", None),
-                "description": getattr(a, "description", None),
+                "description": getattr(a, "short_description", None), # Map short_description to description
+                "price": getattr(a, "price", None),
+                "booking_link": getattr(a, "booking_link", None),
             }
             for a in state["activity_data"]
         ]
