@@ -34,9 +34,9 @@ export default function App() {
 
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState("");
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
-  const [withReasoning, setWithReasoning] = useState(true);
+  const [withReasoning, setWithReasoning] = useState(false);
   const [withTools, setWithTools] = useState(true);
-  const [withPlanner, setWithPlanner] = useState(true);
+  const [withPlanner, setWithPlanner] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editablePlan, setEditablePlan] = useState(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
