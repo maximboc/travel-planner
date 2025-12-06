@@ -60,6 +60,7 @@ export const TripDetailsSidebar = ({
         <div className="space-y-4">
           {isEditing ? (
             <div className="space-y-4">
+              {/* ... (Editing inputs remain unchanged) ... */}
               <div>
                 <label className="text-xs font-semibold text-gray-600">
                   Destination
@@ -141,6 +142,7 @@ export const TripDetailsSidebar = ({
             </div>
           ) : (
             <>
+              {/* ... (Destination, Dates, Budget, Passengers blocks remain unchanged) ... */}
               {plan && (
                 <>
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
@@ -220,6 +222,7 @@ export const TripDetailsSidebar = ({
                 </div>
               )}
 
+              {/* FLIGHTS BLOCK */}
               {agentState.flight_data && agentState.flight_data.length > 0 && (
                 <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100">
                   <div className="flex items-center gap-2 mb-2">
@@ -232,14 +235,17 @@ export const TripDetailsSidebar = ({
                     {agentState.flight_data.map((f, i) => (
                       <div
                         key={i}
-                        className="text-sm p-2 bg-white/50 rounded-lg"
+                        className={`text-sm p-2 rounded-lg ${
+                          agentState.selected_flight_index === i
+                            ? "bg-cyan-200/50 border border-cyan-300"
+                            : "bg-white/50"
+                        }`}
                       >
                         <p className="font-bold">
                           {f.price} {f.currency}
                         </p>
                         <p className="text-xs">
-                          Depart:{" "}
-                          {new Date(f.departure_time).toLocaleString()}
+                          Depart: {new Date(f.departure_time).toLocaleString()}
                         </p>
                         <p className="text-xs">
                           Arrive: {new Date(f.arrival_time).toLocaleString()}
@@ -247,35 +253,78 @@ export const TripDetailsSidebar = ({
                       </div>
                     ))}
                   </div>
-                  {agentState.selected_flight_index !== null && (
-                    <p className="text-xs text-gray-600 mt-1">
-                      Selected: Option {agentState.selected_flight_index + 1}
-                    </p>
-                  )}
                 </div>
               )}
 
+              {/* HOTELS BLOCK*/}
               {agentState.hotel_data &&
                 agentState.hotel_data.hotels &&
                 agentState.hotel_data.hotels.length > 0 && (
                   <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <Hotel className="w-5 h-5 text-emerald-600" />
                       <span className="text-xs font-semibold text-emerald-900 uppercase">
                         Hotels Found
                       </span>
                     </div>
-                    <p className="font-bold text-gray-800">
-                      {agentState.hotel_data.hotels.length} options
-                    </p>
-                    {agentState.selected_hotel_index !== null && (
-                      <p className="text-xs text-gray-600 mt-1">
-                        Selected: Option {agentState.selected_hotel_index + 1}
-                      </p>
-                    )}
+                    <div className="space-y-3">
+                      {agentState.hotel_data.hotels.map((h, i) => {
+                        const isSelected = agentState.selected_hotel_index === i;
+                        return (
+                          <div
+                            key={i}
+                            className={`relative text-sm p-3 rounded-xl border transition-all duration-200 ${
+                              isSelected
+                                ? "bg-white border-emerald-500 shadow-md ring-1 ring-emerald-500"
+                                : "bg-white/60 border-emerald-100 hover:border-emerald-300"
+                            }`}
+                          >
+                            {/* Selected Badge */}
+                            {isSelected && (
+                              <div className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                CHOSEN
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <p className="font-bold text-gray-800 leading-tight">
+                                  {h.name}
+                                </p>
+                                {h.rating && (
+                                  <div className="flex items-center mt-1">
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                                      ★ {h.rating}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Price Display */}
+                              {h.price && (
+                                <div className="text-right shrink-0">
+                                  <p className="font-bold text-emerald-700">
+                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: h.currency || 'USD' }).format(h.price)}
+                                  </p>
+                                  <p className="text-[10px] text-gray-500">total</p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Room Description */}
+                            {h.description && (
+                              <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
+                                {h.description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
+              {/* ACTIVITIES BLOCK*/}
               {agentState.activity_data &&
                 agentState.activity_data.length > 0 && (
                   <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100">
@@ -285,9 +334,28 @@ export const TripDetailsSidebar = ({
                         Activities
                       </span>
                     </div>
-                    <p className="font-bold text-gray-800">
-                      {agentState.activity_data.length} found
-                    </p>
+                    {/* Replaced simple count with map loop */}
+                    <div className="space-y-2">
+                      {agentState.activity_data.map((a, i) => (
+                        <div
+                          key={i}
+                          className="text-sm p-2 bg-white/50 rounded-lg"
+                        >
+                          <p className="font-bold truncate">{a.name}</p>
+                          {/* Try description or short_description depending on what backend sends */}
+                          {(a.description || a.short_description) && (
+                            <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                              {a.description || a.short_description}
+                            </p>
+                          )}
+                          {a.price && (
+                            <p className="text-xs font-semibold text-yellow-700 mt-1">
+                              {a.price}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
             </>

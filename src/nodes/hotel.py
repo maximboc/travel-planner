@@ -164,7 +164,7 @@ Return a JSON object containing the index of the selected hotel from the list pr
 
         selected_index = selection_data.get("selected_hotel_index", None)
 
-        if selected_index:
+        if selected_index is not None:
             state.selected_hotel_index = selected_index
             print(
                 f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"

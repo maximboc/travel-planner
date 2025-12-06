@@ -181,14 +181,22 @@ def serialize_state_for_frontend(state: dict) -> dict:
         hotel_data = state["hotel_data"]
         if hasattr(hotel_data, "hotels"):
             frontend_state["hotel_data"] = {
-                "hotels": [
-                    {
-                        "name": getattr(h, "name", None),
-                        "rating": getattr(h, "rating", None),
-                    }
-                    for h in hotel_data.hotels
-                ]
+                "hotels": []
             }
+            for h in hotel_data.hotels:
+                # Extract the first offer to get price details
+                offer = h.offers[0] if h.offers and len(h.offers) > 0 else None
+                
+                hotel_dict = {
+                    "name": getattr(h, "name", None),
+                    "rating": getattr(h, "rating", None),
+                    # Add these fields:
+                    "price": offer.price.total if offer and offer.price else None,
+                    "currency": offer.price.currency if offer and offer.price else None,
+                    "description": offer.room.description if offer and offer.room else None,
+                    "booking_link": offer.booking_link if offer else None,
+                }
+                frontend_state["hotel_data"]["hotels"].append(hotel_dict)
 
     if state.get("activity_data"):
         frontend_state["activity_data"] = [

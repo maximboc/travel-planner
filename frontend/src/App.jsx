@@ -36,7 +36,7 @@ export default function App() {
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
   const [withReasoning, setWithReasoning] = useState(false);
   const [withTools, setWithTools] = useState(true);
-  const [withPlanner, setWithPlanner] = useState(false);
+  const [withPlanner, setWithPlanner] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editablePlan, setEditablePlan] = useState(null);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
