@@ -5,9 +5,12 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-export const ActivitiesBlock = ({ activityData }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultOpen);
   
+  // Determine visibility
+  const shouldShow = isExpanded || defaultOpen;
+
   return (
     <div className="bg-yellow-50 rounded-xl border border-yellow-100 overflow-hidden">
       <button
@@ -20,14 +23,14 @@ export const ActivitiesBlock = ({ activityData }) => {
             Activities Found ({activityData.length})
           </span>
         </div>
-        {isExpanded ? (
+        {shouldShow ? (
           <ChevronUp className="w-4 h-4 text-yellow-600" />
         ) : (
           <ChevronDown className="w-4 h-4 text-yellow-600" />
         )}
       </button>
       
-      {isExpanded && (
+      {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
           {activityData.map((a, i) => (
             <div
