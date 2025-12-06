@@ -1,9 +1,10 @@
-import { ChatInput } from "./component/ChatInput";
+import { ChatInput } from "./component/chat/ChatInput";
 import { QuickActions } from './component/QuickActions'
-import { TripDetailsSidebar } from './component/TripDetails'
+import { TripDetailsSidebar } from './component/details/TripDetails'
 import { Header } from './component/Header'
-import { ProcessingSteps } from './component/ProcessingSteps'
-import { Message } from './component/Message'
+import { ProcessingSteps } from './component/chat/ProcessingSteps'
+import { Message } from './component/chat/Message'
+
 import React, { useState, useRef, useEffect } from "react";
 import { Plane } from "lucide-react";
 
@@ -338,8 +339,6 @@ export default function App() {
       setCurrentStreamingMessage("");
     }
   };
-
-  const hasState = agentState.plan || agentState.adults || agentState.flight_data;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">

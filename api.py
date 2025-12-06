@@ -167,43 +167,23 @@ def serialize_state_for_frontend(state: dict) -> dict:
             frontend_state[field] = state[field]
 
     if state.get("flight_data"):
-        frontend_state["flight_data"] = [
-            {
-                "price": getattr(f, "price", None),
-                "currency": getattr(f, "currency", None),
-                "departure_time": getattr(f, "departure_time", None),
-                "arrival_time": getattr(f, "arrival_time", None),
-            }
-            for f in state["flight_data"]
-        ]
+        frontend_state["flight_data"] = [f.model_dump() for f in state["flight_data"]]
+    else:
+        frontend_state["flight_data"] = []
 
     if state.get("hotel_data"):
-        hotel_data = state["hotel_data"]
-        if hasattr(hotel_data, "hotels"):
-            frontend_state["hotel_data"] = {
-                "hotels": []
-            }
-            for h in hotel_data.hotels:
-                # Extract the first offer to get price details
-                offer = h.offers[0] if h.offers and len(h.offers) > 0 else None
-                
-                hotel_dict = {
-                    "name": getattr(h, "name", None),
-                    "rating": getattr(h, "rating", None),
-                    # Add these fields:
-                    "price": offer.price.total if offer and offer.price else None,
-                    "currency": offer.price.currency if offer and offer.price else None,
-                    "description": offer.room.description if offer and offer.room else None,
-                    "booking_link": offer.booking_link if offer else None,
-                }
-                frontend_state["hotel_data"]["hotels"].append(hotel_dict)
+        frontend_state["hotel_data"] = state["hotel_data"].model_dump()
+    else:
+        frontend_state["hotel_data"] = {"hotels": []}
 
     if state.get("activity_data"):
         # We explicitly extract fields defined in ActivityResultState
         frontend_state["activity_data"] = [
             {
                 "name": getattr(a, "name", None),
-                "description": getattr(a, "short_description", None), # Map short_description to description
+                "description": getattr(
+                    a, "short_description", None
+                ),  # Map short_description to description
                 "price": getattr(a, "price", None),
                 "booking_link": getattr(a, "booking_link", None),
             }
