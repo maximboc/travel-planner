@@ -1,3 +1,5 @@
+import React, { useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import { MapPin, Edit3, Download } from "lucide-react";
 import { ActivitiesBlock } from './ActivitiesBlock'
 import { BudgetBlock } from './BudgetBlock'
@@ -20,59 +22,19 @@ export const TripDetailsSidebar = ({
   const plan = agentState.plan;
   const hasState = plan || agentState.adults || agentState.flight_data;
 
-  const handleDownload = () => {
-    if (!plan) return;
+  // 1. Create a ref for the section we want to capture as a PDF
+  const contentRef = useRef(null);
 
-    const { city_code, flight_data, selected_flight_index, hotel_data, selected_hotel_index } = agentState;
-
-    // Helper to format currency
-    const fmt = (val) => val ? `$${val}` : 'N/A';
-
-    // Construct the text content
-    let content = `✈️ TRIP ITINERARY: ${plan.destination || city_code}\n`;
-    content += `==========================================\n\n`;
-    
-    content += `📅 DATES\n`;
-    content += `From: ${plan.departure_date}\nTo:   ${plan.arrival_date}\n\n`;
-    
-    content += `💰 BUDGET & INTERESTS\n`;
-    content += `Budget: ${fmt(plan.budget)}\nInterests: ${plan.interests}\n\n`;
-    
-    content += `👥 TRAVELERS\n`;
-    content += `Adults: ${agentState.adults || 1}, Children: ${agentState.children || 0}\n\n`;
-
-    // Flight Details
-    if (flight_data && selected_flight_index !== null && flight_data[selected_flight_index]) {
-      const flight = flight_data[selected_flight_index];
-      content += `🛫 FLIGHT DETAILS\n`;
-      content += `Airline: ${flight.airline}\n`;
-      content += `Price: ${fmt(flight.price)}\n`;
-      content += `Flight Number: ${flight.flight_number}\n`;
-      content += `Duration: ${flight.duration}\n\n`;
-    }
-
-    // Hotel Details
-    if (hotel_data && hotel_data.hotels && selected_hotel_index !== null) {
-      const hotel = hotel_data.hotels[selected_hotel_index];
-      content += `🏨 HOTEL DETAILS\n`;
-      content += `Name: ${hotel.name}\n`;
-      if(hotel.offers?.[0]?.price?.total) {
-         content += `Total Cost: ${hotel.offers[0].price.total} ${hotel.offers[0].price.currency}\n`;
-      }
-      content += `Address: ${hotel.location?.city_code || 'N/A'}\n`;
-    }
-
-    // Create the blob and trigger download
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Trip_to_${plan.destination || 'itinerary'}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  // 2. Setup the print functionality
+  const handlePrint = useReactToPrint({
+    contentRef,
+    documentTitle: `Trip_Itinerary_${plan?.destination || 'Plan'}`,
+    // This allows background graphics (colors) to be printed depending on browser settings
+    onBeforeGetContent: () => {
+      return Promise.resolve();
+    },
+    removeAfterPrint: true,
+  });
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-purple-100 p-6 sticky top-24 animate-in slide-in-from-right-10 duration-300">
@@ -85,9 +47,9 @@ export const TripDetailsSidebar = ({
         <div className="flex gap-2">
           {plan && !isEditing && (
             <button
-              onClick={handleDownload}
+              onClick={handlePrint}
               className="text-gray-400 hover:text-purple-600 transition-colors p-1"
-              title="Download Itinerary"
+              title="Download PDF"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -119,7 +81,19 @@ export const TripDetailsSidebar = ({
               onCancel={onCancelEdit}
             />
           ) : (
-            <>
+            /* 3. The 'ref' is attached here. 
+               Only children of this div are included in the PDF.
+            */
+            <div ref={contentRef} className="space-y-4 p-2">
+              
+              {/* This header is hidden on screen but visible in the PDF */}
+              <div className="hidden print:block mb-6 border-b pb-4">
+                <h1 className="text-2xl font-bold text-purple-800">Trip Itinerary</h1>
+                <p className="text-gray-600">
+                  Destination: {plan?.destination || agentState.city_code || 'TBD'}
+                </p>
+              </div>
+
               {plan && (
                 <>
                   <DestinationBlock plan={plan} cityCode={agentState.city_code} />
@@ -154,7 +128,12 @@ export const TripDetailsSidebar = ({
                 agentState.activity_data.length > 0 && (
                   <ActivitiesBlock activityData={agentState.activity_data} />
                 )}
-            </>
+                
+              {/* Footer for PDF only */}
+              <div className="hidden print:block mt-8 pt-4 border-t text-sm text-gray-400 text-center">
+                Generated by Travel Agent AI
+              </div>
+            </div>
           )}
         </div>
       )}
