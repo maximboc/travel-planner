@@ -12,3 +12,4 @@ ruff
 black
 fastapi
 uvicorn
+langchain_core

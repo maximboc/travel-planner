@@ -58,6 +58,12 @@ class AgentState(BaseModel):
     origin_code: Annotated[Optional[str], replace_value] = Field(
         default=None, description="IATA code of the origin city"
     )
+    latitude: Annotated[Optional[float], replace_value] = Field(
+        default=None, description="Latitude of the destination city"
+    )
+    longitude: Annotated[Optional[float], replace_value] = Field(
+        default=None, description="Longitude of the destination city"
+    )
 
     # Flights
     flight_data: Annotated[Optional[List[FlightSearchResultState]], replace_value] = (

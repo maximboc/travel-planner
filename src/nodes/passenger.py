@@ -30,7 +30,14 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
 
     messages = state.messages
 
-    PROMPT = f'''Your task: **Extract passenger information**. If unclear, return null values.
+    PROMPT = f'''Your task: **Extract passenger information**.
+
+----------------------------
+LOGIC RULES
+----------------------------
+- If the user says "I am alone" or "just me", it means 1 adult.
+- If the user does not specify the number of passengers, and there is no information about it, you can assume 1 adult.
+- Confidence is "low" only if the user mentions multiple people but doesn't specify the numbers (e.g., "I'm traveling with my family").
 
 ----------------------------
 USER MESSAGE

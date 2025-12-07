@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "lucide-react": "^0.555.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
-  }
-}

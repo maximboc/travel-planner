@@ -44,6 +44,24 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
     itinerary = state.final_itinerary
     current_rev = state.revision_count
 
+    flight_cost = 0
+    if (
+        state.flight_data
+        and state.selected_flight_index is not None
+        and state.selected_flight_index < len(state.flight_data)
+    ):
+        flight_cost = state.flight_data[state.selected_flight_index].price
+
+    hotel_cost = 0
+    if (
+        state.plan.need_hotel
+        and state.hotel_data
+        and state.hotel_data.hotels
+        and state.selected_hotel_index is not None
+        and state.selected_hotel_index < len(state.hotel_data.hotels)
+    ):
+        hotel_cost = state.hotel_data.hotels[state.selected_hotel_index].price
+    
     # Critique Prompt
     prompt = f"""
     You are a Strict Travel Quality Control Agent.
@@ -51,15 +69,21 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
     PLAN CONSTRAINTS:
     - Destination: {plan.destination}
     - Dates: {plan.departure_date} to {plan.arrival_date}
-    - Budget limit: ${plan.budget}
+    - Initial budget: ${plan.budget}
+
+    COSTS:
+    - Flight cost: ${flight_cost}
+    - Hotel cost: ${hotel_cost}
+    - Remaining budget: ${plan.remaining_budget}
 
     ITINERARY:
     {itinerary}
     
     TASK:
     Check if the itinerary respects the constraints.
+    The total cost of the trip should not exceed the initial budget.
     - If good: Reply "APPROVE"
-    - If bad (wrong dates, wrong city, hallucinations): Reply "REJECT: [Reason]"
+    - If bad (wrong dates, wrong city, hallucinations, budget exceeded): Reply "REJECT: [Reason]". When budget is exceeded, don't hesitate to tell to select less activities.
     """
 
     raw = llm.invoke(prompt).content

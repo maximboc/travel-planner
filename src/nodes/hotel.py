@@ -6,9 +6,55 @@ from langchain_ollama import ChatOllama
 
 from langgraph.types import Command
 
-from src.states.hotel import HotelSearchState
+from src.states import HotelDetails, HotelSearchState
 from src.tools import HotelSearchTool, AmadeusAuth
 from src.states import AgentState, PlanDetailsState
+
+
+def format_hotels_for_llm_compact(hotels: list[HotelDetails]) -> str:
+    """Compact version of hotel formatting for LLM analysis."""
+    lines = []
+
+    for i, hotel in enumerate(hotels, start=1):
+        lines.append(f"Hotel #{i} — {hotel.name} (ID: {hotel.hotel_id})")
+        lines.append(f"  Location: {hotel.location.city_code}")
+
+        if hotel.location.latitude and hotel.location.longitude:
+            lines.append(
+                f"  Coordinates: {hotel.location.latitude}, {hotel.location.longitude}"
+            )
+
+        if hotel.contact and hotel.contact.phone:
+            lines.append(f"  Phone: {hotel.contact.phone}")
+
+        lines.append(f"  Available Offers: {len(hotel.offers)}")
+
+        for offer_idx, offer in enumerate(hotel.offers, start=1):
+            lines.append(
+                f"    Offer {offer_idx}: {offer.price.total} {offer.price.currency} "
+                f"({offer.check_in} to {offer.check_out})"
+            )
+
+            if offer.price.avg_nightly:
+                lines.append(
+                    f"      Avg/night: {offer.price.avg_nightly} {offer.price.currency}"
+                )
+
+            lines.append(
+                f"      Room: {offer.room.room_type} - {offer.room.description}"
+            )
+
+            if offer.room.beds and offer.room.bed_type:
+                lines.append(f"      Beds: {offer.room.beds}x {offer.room.bed_type}")
+
+            lines.append(f"      Board: {offer.board_type} | Guests: {offer.guests}")
+
+            if offer.cancellation_policy:
+                lines.append(f"      Cancellation: {offer.cancellation_policy}")
+
+        lines.append("")
+
+    return "\n".join(lines).strip()
 
 
 @traceable
@@ -73,15 +119,12 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
                     destination_city_code :{state.city_code}
                     Provide a list of 3 hotels in the destination city with the following details for each hotel
                 """
-                response = llm.invoke(
-                    [
-                        SystemMessage(),
-                        {"role": "user", "content": hotel_search_prompt},
-                    ]
-                )
+                response = llm.invoke(hotel_search_prompt)
                 content = response.content
                 hotels = json.loads(content.strip())
-                state.hotel_data = HotelSearchState(city_code=state.origin_code,hotels=hotels)
+                state.hotel_data = HotelSearchState(
+                    city_code=state.origin_code, hotels=hotels
+                )
 
         except Exception as e:
             print(f"   ⚠️ Hotel search error: {e}")
@@ -104,85 +147,77 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     except Exception as e:
         duration = 1
         print(f"   ⚠️ Date parsing error: {e}, defaulting duration to 1 night.")
-        PROMPT = f"""
-You are an expert Travel Concierge. Your task is to analyze a list of available hotels and select the best matches for the user.
 
-----------------------------
-USER PROFILE
-----------------------------
-- Budget: ${plan.budget or "Flexible"} (Total trip budget)
-- Travelers: {state.adults or 1} Adults, {state.children or 0} Children
-- Interests: {plan.interests or "General"}
-- Trip Duration: {duration} nights
+    hotel_data_str = format_hotels_for_llm_compact(state.hotel_data.hotels)
 
-----------------------------
-AVAILABLE HOTELS (RAW DATA)
-----------------------------
-{state.hotel_data.hotels if state.hotel_data else "No hotel data available."}
+    PROMPT = f"""
+        You are an expert Travel Concierge. Your task is to analyze a list of available hotels and select the best matches for the user.
 
-----------------------------
-INSTRUCTIONS
-----------------------------
-1. **Filter by Price**: Ensure the total cost (Price per night * {duration}) fits reasonably within the budget.
-2. **Match Interests**: Prioritize hotels with amenities matching the user's interests (e.g., "Gym" for fitness, "Pool" for kids, "Central" for sightseeing).
-3. **Select the Single Best**: Choose the single absolute best option from the list.
-4. **Reasoning**: Write a short, persuasive "selling point" explaining why this is the winner.
+        ----------------------------
+        USER PROFILE
+        ----------------------------
+        - Budget: ${plan.budget or "Flexible"} (Total trip budget)
+        - Travelers: {state.adults or 1} Adults, {state.children or 0} Children, {state.infants or 0} Infants
+        - Trip Duration: {duration} nights
 
-----------------------------
-OUTPUT FORMAT (STRICT JSON)
-----------------------------
-Return a JSON object containing the index of the selected hotel from the list provided and the hotel details.
+        ----------------------------
+        AVAILABLE HOTELS (RAW DATA)
+        ----------------------------
+        {hotel_data_str}
 
-{{
-  "selected_hotel_index": 0,
-  "selected_hotel": {{
-      "name": "Hotel Name",
-      "price_per_night": 0.0,
-      "total_price": 0.0,
-      "rating": "4.5 stars",
-      "reason": "The absolute best choice because..."
-  }}
-}}
-"""
-        print("   🧠 Analyzing hotel options...")
-        response = llm.invoke(
-            [
-                SystemMessage(
-                    content="You are a hotel recommendation engine. Output strictly valid JSON."
-                ),
-                {"role": "user", "content": PROMPT},
-            ]
+        ----------------------------
+        INSTRUCTIONS
+        ----------------------------
+        1. **Filter by Price**: Ensure the total cost (Price per night * {duration}) fits reasonably within the budget.
+        2. **Match Interests**: Prioritize hotels with amenities matching the user's interests (e.g., "Gym" for fitness, "Pool" for kids, "Central" for sightseeing).
+        3. **Select the Single Best**: Choose the single absolute best option from the list.
+        4. **Reasoning**: Write a short, persuasive "selling point" explaining why this is the winner.
+
+        ----------------------------
+        OUTPUT FORMAT (STRICT JSON)
+        ----------------------------
+        Return a JSON object containing the index of the selected hotel from the list provided and the hotel details.
+
+        {{
+        "selected_hotel_index": 0,
+        "selected_hotel": {{
+            "name": "Hotel Name",
+            "price_per_night": 0.0,
+            "total_price": 0.0,
+            "rating": "4.5 stars",
+            "reason": "The absolute best choice because..."
+        }}
+        }}
+    """
+    print("   🧠 Analyzing hotel options...")
+    response = llm.invoke(
+        [
+            SystemMessage(
+                content="You are a hotel recommendation engine. Output strictly valid JSON."
+            ),
+            {"role": "user", "content": PROMPT},
+        ]
+    )
+
+    content = response.content
+    if "```json" in content:
+        content = content.split("```json")[1].split("```")[0]
+    elif "```" in content:
+        content = content.split("```")[1].split("```")[0]
+
+    selection_data = json.loads(content.strip())
+    selected_index = selection_data.get("selected_hotel_index", None)
+
+    if selected_index is not None:
+        state.selected_hotel_index = selected_index
+        print(
+            f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
         )
-
-        content = response.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-
-        selection_data = json.loads(content.strip())
-
-        selected_index = selection_data.get("selected_hotel_index", None)
-
-        if selected_index is not None:
-            state.selected_hotel_index = selected_index
-            print(
-                f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
-            )
-        else:
-            state.hotel_data = []
-            print("   ⚠️ No valid hotel selection made.")
+    else:
+        state.selected_hotel_index = None
+        print("   ⚠️ No valid hotel selection made.")
 
     print("   ✅ Hotel analysis complete.")
-    if (
-        state.selected_hotel_index is not None
-        and state.hotel_data
-        and state.hotel_data.hotels
-    ):
-        # TODO:
-        print(
-            f"   Selected hotel (Index {state.selected_hotel_index}): {state.hotel_data.hotels[state.selected_hotel_index]}"
-        )
 
     state.last_node = None
     state.needs_user_input = False

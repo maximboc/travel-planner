@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight, Calendar } from 'lucide-react';
+import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight, MapPin } from 'lucide-react';
 
-export const FlightsBlock = ({ flightData, selectedIndex }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultOpen);
   const flights = flightData || [];
+  
+  // Determine visibility: User toggled OR forced open by print
+  const shouldShow = isExpanded || defaultOpen;
 
   const formatPrice = (price, currency = 'USD') => {
     try {
@@ -31,19 +34,6 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
     }
   };
 
-  const formatTime = (isoString) => {
-    if (!isoString) return 'N/A';
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return isoString;
-    }
-  };
-
   const formatDuration = (duration) => {
     if (!duration) return 'N/A';
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
@@ -61,6 +51,11 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
     return `${stops} stops`;
   };
 
+  const getGoogleMapsLink = (airportCode) => {
+      if (!airportCode) return null;
+      const query = encodeURIComponent(`${airportCode} airport`);
+      return `http://maps.google.com/?q=${query}`;
+  };
   return (
     <div className="bg-cyan-50 rounded-xl border border-cyan-100 overflow-hidden">
       <button
@@ -73,21 +68,20 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
             Flights Found ({flights.length})
           </span>
         </div>
-        {isExpanded ? (
+        {shouldShow ? (
           <ChevronUp className="w-4 h-4 text-cyan-600" />
         ) : (
           <ChevronDown className="w-4 h-4 text-cyan-600" />
         )}
       </button>
 
-      {isExpanded && (
+      {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
           {flights.map((flight, i) => {
             const isSelected = selectedIndex === i;
             const outbound = flight.itineraries?.[0];
             const returnFlight = flight.itineraries?.[1];
             
-            // Get first and last segments for minimal view
             const firstSegment = outbound?.segments?.[0];
             const lastSegment = outbound?.segments?.[outbound.segments.length - 1];
 
@@ -106,7 +100,7 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                   </div>
                 )}
 
-                {/* Minimal Info (Always Shown) */}
+                {/* Minimal Info */}
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1">
                     {firstSegment && lastSegment && (
@@ -144,7 +138,7 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                   </div>
                 </div>
 
-                {/* Detailed Info (Shown When Selected) */}
+                {/* Detailed Info (Shown When Selected OR if you want to force all details on print, add defaultOpen to condition) */}
                 {isSelected && (
                   <div className="mt-3 pt-3 border-t border-cyan-100 space-y-3">
                     {/* Outbound Itinerary */}
@@ -161,7 +155,6 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                             key={idx}
                             className="bg-cyan-50 rounded-lg p-2.5 space-y-2"
                           >
-                            {/* Route */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-gray-800">
@@ -179,23 +172,39 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                               )}
                             </div>
 
-                            {/* Times */}
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div>
                                 <p className="text-gray-500">Departure</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.departure_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.departure_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                               <div>
                                 <p className="text-gray-500">Arrival</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.arrival_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.arrival_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                             </div>
 
-                            {/* Duration & Stops */}
                             <div className="flex items-center gap-3 text-xs pt-1 border-t border-cyan-100">
                               {segment.duration && (
                                 <div className="flex items-center gap-1 text-gray-600">
@@ -230,7 +239,6 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                             key={idx}
                             className="bg-cyan-50 rounded-lg p-2.5 space-y-2"
                           >
-                            {/* Route */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-gray-800">
@@ -248,23 +256,39 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                               )}
                             </div>
 
-                            {/* Times */}
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div>
                                 <p className="text-gray-500">Departure</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.departure_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.departure_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                               <div>
                                 <p className="text-gray-500">Arrival</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.arrival_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.arrival_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                             </div>
 
-                            {/* Duration & Stops */}
                             <div className="flex items-center gap-3 text-xs pt-1 border-t border-cyan-100">
                               {segment.duration && (
                                 <div className="flex items-center gap-1 text-gray-600">
@@ -277,7 +301,7 @@ export const FlightsBlock = ({ flightData, selectedIndex }) => {
                                   <span className={segment.stops === 0 ? 'text-green-600 font-medium' : ''}>
                                     {getStopsText(segment.stops)}
                                   </span>
-                                </div>
+                                d</div>
                               )}
                             </div>
                           </div>

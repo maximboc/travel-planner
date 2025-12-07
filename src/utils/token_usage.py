@@ -47,11 +47,23 @@ class TokenUsageTracker(BaseCallbackHandler):
                 )
 
     def on_chat_model_start(
-        self, serialized: Dict[str, Any], messages: List[List[Any]], **kwargs: Any
+        self,
+        serialized: Dict[str, Any],
+        messages: List[List[Any]],
+        tags: List[str] = None,
+        **kwargs: Any,
     ) -> Any:
         """Capture the start time and generate a unique call ID."""
         self.start_time = time.time()
         self.current_call_id = str(uuid.uuid4())
+        self.node_name = "Unknown_Node"
+        if tags:
+            # Find the node name (doesn't contain ':')
+            node_tag = next((tag for tag in tags if ":" not in tag), None)
+            if node_tag:
+                self.node_name = node_tag
+            else: # If no specific node tag found, join all tags for debugging/information
+                self.node_name = ",".join(tags) if tags else "Unknown_Node"
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
         """Capture end time, calculate latency, and extract token usage."""
@@ -97,13 +109,13 @@ class TokenUsageTracker(BaseCallbackHandler):
                     self.scenario_id,
                     self.current_call_id,
                     self.model_name,
-                    "Ollama/Local",  # Endpoint
+                    "Ollama/Local",
                     prompt_tokens,
                     completion_tokens,
                     total_tokens,
                     f"{latency_ms:.2f}",
                     "SUCCESS",
-                    "",  # Notes
+                    self.node_name,
                 ]
             )
 
