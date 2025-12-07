@@ -41,7 +41,7 @@ class ActivitySearchTool(BaseTool):
         headers: Dict[str, str] = {"Authorization": f"Bearer {token}"}
         params: Dict[str, str | int] = {
             "keyword": keyword,
-            "subType": "CITY",
+            "subType": "CITY,AIRPORT",
             "page[limit]": 1,
         }
 

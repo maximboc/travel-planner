@@ -12,6 +12,7 @@ from src.tools import (
     AmadeusAuth,
     FlightSearchTool,
     HotelSearchTool,
+    get_user_location,
 )
 
 
@@ -39,6 +40,7 @@ def create_agent():
         get_exchange_rate,
         get_todays_date,
         get_weather,
+        get_user_location,
     ]
 
     checkpointer = MemorySaver()

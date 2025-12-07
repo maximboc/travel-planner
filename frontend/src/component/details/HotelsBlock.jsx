@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Hotel, ChevronDown, ChevronUp, MapPin, Phone, Calendar, Users, Bed } from 'lucide-react';
+import { Hotel, ChevronDown, ChevronUp, Phone, Calendar, Users, Bed } from 'lucide-react';
 
-export const HotelsBlock = ({ hotelData, selectedIndex }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultOpen);
   const hotels = hotelData?.hotels || [];
+
+  // Determine visibility
+  const shouldShow = isExpanded || defaultOpen;
 
   const formatPrice = (price, currency = 'USD') => {
     try {
@@ -16,10 +19,10 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
     }
   };
 
-  const getGoogleMapsLink = (latitude, longitude) => {
-    if (!latitude || !longitude) return null;
-    // Fixed syntax error and used standard Google Maps URL
-    return `https://www.google.com/maps?q=${latitude},${longitude}`;
+  const getBookingComLink = (hotel) => {
+    if (!hotel) return null;
+    const query = encodeURIComponent(`${hotel.name} ${hotel.location?.city_code}`);
+    return `https://www.booking.com/searchresults.html?ss=${query}`;
   };
 
   return (
@@ -34,22 +37,19 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
             Hotels Found ({hotels.length})
           </span>
         </div>
-        {isExpanded ? (
+        {shouldShow ? (
           <ChevronUp className="w-4 h-4 text-emerald-600" />
         ) : (
           <ChevronDown className="w-4 h-4 text-emerald-600" />
         )}
       </button>
 
-      {isExpanded && (
+      {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
           {hotels.map((hotel, i) => {
             const isSelected = selectedIndex === i;
             const firstOffer = hotel.offers?.[0];
-            const mapsLink = getGoogleMapsLink(
-              hotel.location?.latitude,
-              hotel.location?.longitude
-            );
+            const bookingLink = getBookingComLink(hotel);
 
             return (
               <div
@@ -66,7 +66,7 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                   </div>
                 )}
 
-                {/* Header Info (Name & Base Price) */}
+                {/* Header Info */}
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex-1">
                     <p className="font-bold text-gray-800 leading-tight">
@@ -88,21 +88,10 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                   )}
                 </div>
 
-                {/* Detailed Info (Always shown now, regardless of selection) */}
+                {/* Detailed Info */}
                 <div className="mt-3 pt-3 border-t border-emerald-100 space-y-3">
                   {/* Location & Contact */}
                   <div className="space-y-2">
-                    {mapsLink && (
-                      <a
-                        href={mapsLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 hover:underline"
-                      >
-                        <MapPin className="w-3.5 h-3.5" />
-                        View on Google Maps
-                      </a>
-                    )}
                     {hotel.contact?.phone && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Phone className="w-3.5 h-3.5" />
@@ -128,7 +117,6 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                           key={offer.offer_id || idx}
                           className="bg-emerald-50 rounded-lg p-2.5 space-y-2"
                         >
-                          {/* Dates & Guests */}
                           <div className="flex items-center gap-3 text-xs">
                             <div className="flex items-center gap-1 text-gray-600">
                               <Calendar className="w-3 h-3" />
@@ -140,7 +128,6 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                             </div>
                           </div>
 
-                          {/* Room Details */}
                           {offer.room && (
                             <div className="space-y-1">
                               <div className="flex items-center gap-1.5">
@@ -164,7 +151,6 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                             </div>
                           )}
 
-                          {/* Price Breakdown */}
                           <div className="flex justify-between items-end pt-1.5 border-t border-emerald-100">
                             <div className="space-y-0.5">
                               {offer.board_type && (
@@ -190,17 +176,16 @@ export const HotelsBlock = ({ hotelData, selectedIndex }) => {
                             </div>
                           </div>
 
-                          {/* Cancellation & Booking */}
-                          {(offer.cancellation_policy || offer.booking_link) && (
+                          {(offer.cancellation_policy || bookingLink) && (
                             <div className="space-y-1.5 pt-1.5 border-t border-emerald-100">
                               {offer.cancellation_policy && (
                                 <p className="text-[10px] text-gray-500">
                                   {offer.cancellation_policy}
                                 </p>
                               )}
-                              {offer.booking_link && (
+                              {bookingLink && (
                                 <a
-                                  href={offer.booking_link}
+                                  href={bookingLink}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-block text-xs text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors"

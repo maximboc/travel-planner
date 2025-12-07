@@ -10,6 +10,7 @@ from .amadeus.hotel_search import HotelSearchInput, HotelSearchTool
 from .date import get_todays_date
 from .weather import GetWeatherTool
 from .exchange_rate import GetExchangeRateTool
+from .location import get_user_location
 
 __all__ = [
     "AmadeusAuth",
@@ -26,4 +27,5 @@ __all__ = [
     "CitySearchInput",
     "CitySearchTool",
     "CitySearchResult",
+    "get_user_location",
 ]

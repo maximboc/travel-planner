@@ -1,9 +1,8 @@
-'''import re
+import re
 from langchain_core.messages import HumanMessage
 import uuid
-from agent.utils.monitoring import TokenUsageTracker
+from src.utils.monitoring import TokenUsageTracker
 from langchain_ollama import ChatOllama
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 
@@ -96,7 +95,8 @@ def run_single_evaluation(
 
     # Generate Judge Response
     # Assuming 'judge_llm' is your Llama 3.1 8b interface
-    judge_raw_output = judge_llm.invoke({"query": prompt})
+    response = judge_llm.invoke({"messages": [HumanMessage(content=prompt)]})
+    judge_raw_output = response["messages"][-1].content
 
     # Parse
     results = parse_judge_output(judge_raw_output)
@@ -132,4 +132,3 @@ def run_batch_evaluation(judged_llm, judged_llm_name, judge_llm):
                 }
             )
     return results
-'''
