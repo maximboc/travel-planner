@@ -7,6 +7,7 @@ import json
 from typing import AsyncGenerator, Optional
 from dotenv import load_dotenv
 import uvicorn
+from src.utils.monitoring import TokenUsageTracker
 
 from src.graph import create_travel_agent_graph
 from src.states.planner import PlanDetailsState
@@ -198,7 +199,9 @@ async def stream_agent_events(
 ) -> AsyncGenerator[str, None]:
     """Stream events from LangGraph execution"""
 
-    config = {"configurable": {"thread_id": session_id}}
+    tracker = TokenUsageTracker(scenario_id=session_id, model_name="llama3.1:8b")
+
+    config = {"configurable": {"thread_id": session_id}, "callbacks": [tracker]}
 
     snapshot = agent_app.get_state(config)
     existing_messages = snapshot.values.get("messages", []) if snapshot.values else []

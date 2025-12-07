@@ -57,24 +57,29 @@ def create_travel_agent_graph():
 
     # Build Graph
     workflow = StateGraph(AgentState)
-    workflow.add_node("planner_agent", functools.partial(planner_node, llm=llm))
+    workflow.add_node("planner_agent", functools.partial(planner_node, llm=llm.with_config(tags=["planner_agent"])))
+    
     workflow.add_node(
         "city_resolver",
-        functools.partial(city_resolver_node, llm=llm, amadeus_auth=amadeus_auth),
+        functools.partial(city_resolver_node, llm=llm.with_config(tags=["city_resolver"]), amadeus_auth=amadeus_auth),
     )
-    workflow.add_node("passenger_agent", functools.partial(passenger_node, llm=llm))
+    
+    workflow.add_node("passenger_agent", functools.partial(passenger_node, llm=llm.with_config(tags=["passenger_agent"])))
+    
     workflow.add_node(
         "flight_agent",
-        functools.partial(flight_node, llm=llm, amadeus_auth=amadeus_auth),
+        functools.partial(flight_node, llm=llm.with_config(tags=["flight_agent"]), amadeus_auth=amadeus_auth),
+    )
+    
+    workflow.add_node(
+        "hotel_agent", functools.partial(hotel_node, amadeus_auth=amadeus_auth, llm=llm.with_config(tags=["hotel_agent"]))
     )
     workflow.add_node(
-        "hotel_agent", functools.partial(hotel_node, amadeus_auth=amadeus_auth, llm=llm)
+        "activity_agent", functools.partial(activity_node, amadeus_auth=amadeus_auth) 
     )
-    workflow.add_node(
-        "activity_agent", functools.partial(activity_node, amadeus_auth=amadeus_auth)
-    )
-    workflow.add_node("compiler", functools.partial(compiler_node, llm=llm))
-    workflow.add_node("reviewer", functools.partial(reviewer_node, llm=llm))
+    
+    workflow.add_node("compiler", functools.partial(compiler_node, llm=llm.with_config(tags=["compiler"])))
+    workflow.add_node("reviewer", functools.partial(reviewer_node, llm=llm.with_config(tags=["reviewer"])))
 
     workflow.add_edge(START, "planner_agent")
     workflow.add_edge("planner_agent", "city_resolver")
