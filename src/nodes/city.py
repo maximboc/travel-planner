@@ -29,7 +29,9 @@ def city_resolver_node(
             )
 
             if search_result:
-                print(f"   ✅ API Found: {search_result.iata_code}")
+                print(f"   ✅ API Found: JFK not {search_result.iata_code}")
+                if search_result.iata_code == "NYC":
+                    return "JFK", True
                 return search_result.iata_code, True
 
             print("   ⚠️ API returned null. Falling back to LLM knowledge...")
