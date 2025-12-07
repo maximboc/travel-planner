@@ -80,58 +80,58 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
                 "   ⚠️ Flight search tool disabled, Using LLM knowledge (may be inaccurate)..."
             )
             flight_search_prompt = f"""
-You are a flight search assistant. Generate realistic flight options based on the following criteria:
+                You are a flight search assistant. Generate realistic flight options based on the following criteria:
 
-Origin: {plan.origin}
-Destination: {plan.destination}
-Departure date: {plan.departure_date}
-Return date: {plan.arrival_date}
-Adults: {getattr(state, "adults", 1)}
-Travel class: {getattr(state, "travel_class", "ECONOMY")}
+                Origin: {plan.origin}
+                Destination: {plan.destination}
+                Departure date: {plan.departure_date}
+                Return date: {plan.arrival_date}
+                Adults: {getattr(state, "adults", 1)}
+                Travel class: {getattr(state, "travel_class", "ECONOMY")}
 
-Generate 3-5 realistic flight options. For each flight offer, provide:
-- A realistic price in USD (consider distance, travel class, and dates)
-- Round-trip itineraries (outbound and return)
-- For each segment include: departure/arrival airports (IATA codes), departure/arrival times (ISO 8601 format), duration, airline (IATA code), and number of stops
+                Generate 3-5 realistic flight options. For each flight offer, provide:
+                - A realistic price in USD (consider distance, travel class, and dates)
+                - Round-trip itineraries (outbound and return)
+                - For each segment include: departure/arrival airports (IATA codes), departure/arrival times (ISO 8601 format), duration, airline (IATA code), and number of stops
 
-Return ONLY a valid JSON array with this exact structure (no markdown, no additional text):
+                Return ONLY a valid JSON array with this exact structure (no markdown, no additional text):
 
-[
-{{
-    "price": "450.00",
-    "currency": "USD",
-    "itineraries": [
-    {{
-        "segments": [
-        {{
-            "departure_airport": "JFK",
-            "arrival_airport": "LAX",
-            "departure_time": "2024-03-15T08:00:00",
-            "arrival_time": "2024-03-15T11:30:00",
-            "duration": "PT5H30M",
-            "airline": "AA",
-            "stops": 0
-        }}
-        ]
-    }},
-    {{
-        "segments": [
-        {{
-            "departure_airport": "LAX",
-            "arrival_airport": "JFK",
-            "departure_time": "2024-03-20T14:00:00",
-            "arrival_time": "2024-03-20T22:30:00",
-            "duration": "PT5H30M",
-            "airline": "AA",
-            "stops": 0
-        }}
-        ]
-    }}
-    ]
-}}
-]
+                [
+                {{
+                    "price": "450.00",
+                    "currency": "USD",
+                    "itineraries": [
+                    {{
+                        "segments": [
+                        {{
+                            "departure_airport": "JFK",
+                            "arrival_airport": "LAX",
+                            "departure_time": "2024-03-15T08:00:00",
+                            "arrival_time": "2024-03-15T11:30:00",
+                            "duration": "PT5H30M",
+                            "airline": "AA",
+                            "stops": 0
+                        }}
+                        ]
+                    }},
+                    {{
+                        "segments": [
+                        {{
+                            "departure_airport": "LAX",
+                            "arrival_airport": "JFK",
+                            "departure_time": "2024-03-20T14:00:00",
+                            "arrival_time": "2024-03-20T22:30:00",
+                            "duration": "PT5H30M",
+                            "airline": "AA",
+                            "stops": 0
+                        }}
+                        ]
+                    }}
+                    ]
+                }}
+                ]
 
-Ensure dates align with the requested departure ({plan.departure_date}) and return ({plan.arrival_date}) dates.
+                Ensure dates align with the requested departure ({plan.departure_date}) and return ({plan.arrival_date}) dates.
             """
 
             flight_search_response = llm.invoke(flight_search_prompt).content
@@ -175,23 +175,24 @@ Ensure dates align with the requested departure ({plan.departure_date}) and retu
     flight_results_str = format_flights_for_llm_compact(flight_results)
 
     filtering_prompt = f"""
-Analyze these flights and filter to the top 3 viable options.
+        Analyze these flights and filter to the top 3 viable options.
 
-Budget: ${plan.remaining_budget}
-Flights:
-{flight_results_str}
+        Budget: ${plan.remaining_budget}
+        Flights:
+        {flight_results_str}
 
-Eliminate flights that:
-- Exceed budget
-- Have excessive layovers (>8 hours)
-- Arrive/depart at very inconvenient times (midnight-5am)
+        Eliminate flights that:
+        - Exceed budget
+        - Have excessive layovers (>8 hours)
+        - Arrive/depart at very inconvenient times (midnight-5am)
 
-Return the indices of the top 3 flights as JSON:
-{{
-  "top_flights": [0, 2, 5],
-  "eliminated_count": 7,
-  "reasoning": "Brief explanation"
-}}"""
+        Return the indices of the top 3 flights as JSON:
+        {{
+        "top_flights": [0, 2, 5],
+        "eliminated_count": 7,
+        "reasoning": "Brief explanation"
+        }}
+    """
 
     try:
         stage1_response = llm.invoke(filtering_prompt).content
@@ -227,28 +228,29 @@ Return the indices of the top 3 flights as JSON:
     top_flights_str = format_flights_for_llm_compact(top_flights)
 
     PROMPT = f"""You have available hotel options. Select the BEST one. Provide a reasoned choice, no code.
-------------------------
-TOP FLIGHT OPTIONS
-------------------------
-Flights:
-{top_flights_str}
+        ------------------------
+        TOP FLIGHT OPTIONS
+        ------------------------
+        Flights:
+        {top_flights_str}
 
------------------------
-YOUR TASK
------------------------
+        -----------------------
+        YOUR TASK
+        -----------------------
 
-Consider the full stay experience:
-- Is the price reasonable for what you get?
-- Is the location convenient?
-- Do the amenities match the traveler's needs?
-- Is it suitable for {state.adults} adults and {state.children} children?
+        Consider the full stay experience:
+        - Is the price reasonable for what you get?
+        - Is the location convenient?
+        - Do the amenities match the traveler's needs?
+        - Is it suitable for {state.adults} adults and {state.children} children?
 
-Return JSON:
-{{
-  "selected_original_index": 0,
-  "price": 0.0,
-  "recommendation": "Detailed 2-3 sentence recommendation explaining why this is the best choice for the traveler"
-}}"""
+        Return JSON:
+        {{
+        "selected_original_index": 0,
+        "price": 0.0,
+        "recommendation": "Detailed 2-3 sentence recommendation explaining why this is the best choice for the traveler"
+        }}
+    """
 
     try:
         stage2_response = llm.invoke(PROMPT).content

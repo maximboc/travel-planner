@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight } from 'lucide-react';
+import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight, MapPin } from 'lucide-react';
 
 export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
@@ -51,6 +51,11 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false })
     return `${stops} stops`;
   };
 
+  const getGoogleMapsLink = (airportCode) => {
+      if (!airportCode) return null;
+      const query = encodeURIComponent(`${airportCode} airport`);
+      return `http://maps.google.com/?q=${query}`;
+  };
   return (
     <div className="bg-cyan-50 rounded-xl border border-cyan-100 overflow-hidden">
       <button
@@ -173,12 +178,30 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false })
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.departure_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.departure_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                               <div>
                                 <p className="text-gray-500">Arrival</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.arrival_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.arrival_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                             </div>
 
@@ -239,12 +262,30 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false })
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.departure_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.departure_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                               <div>
                                 <p className="text-gray-500">Arrival</p>
                                 <p className="font-medium text-gray-800">
                                   {formatDateTime(segment.arrival_time)}
                                 </p>
+                                <a
+                                  href={getGoogleMapsLink(segment.arrival_airport)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-cyan-600 hover:text-cyan-700 hover:underline"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  View on map
+                                </a>
                               </div>
                             </div>
 
@@ -260,7 +301,7 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false })
                                   <span className={segment.stops === 0 ? 'text-green-600 font-medium' : ''}>
                                     {getStopsText(segment.stops)}
                                   </span>
-                                </div>
+                                d</div>
                               )}
                             </div>
                           </div>
