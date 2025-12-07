@@ -3,7 +3,6 @@ import {
   Compass,
   ChevronDown,
   ChevronUp,
-  MapPin,
 } from "lucide-react";
 
 export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
@@ -11,12 +10,6 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
   
   // Determine visibility
   const shouldShow = isExpanded || defaultOpen;
-
-  const getGoogleMapsLink = (activity) => {
-    if (!activity) return null;
-    const query = encodeURIComponent(`${activity.name}, ${activity.location?.city_code}`);
-    return `http://maps.google.com/?q=${query}`;
-  };
 
   return (
     <div className="bg-yellow-50 rounded-xl border border-yellow-100 overflow-hidden">
@@ -40,7 +33,6 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
       {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
           {activityData.map((a, i) => {
-            const mapsLink = getGoogleMapsLink(a);
             return (
             <div
               key={i}
@@ -56,18 +48,6 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
                   </span>
                 )}
               </div>
-
-              {mapsLink && (
-                <a
-                  href={mapsLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-yellow-600 hover:text-yellow-700 hover:underline mt-2"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  View on Google Maps
-                </a>
-              )}
 
               {a.description && (
                 <p className="text-xs text-gray-500 mt-2 line-clamp-2 leading-relaxed">
