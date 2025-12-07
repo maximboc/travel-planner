@@ -4,6 +4,8 @@ import { TripDetailsSidebar } from './component/details/TripDetails'
 import { Header } from './component/Header'
 import { ProcessingSteps } from './component/chat/ProcessingSteps'
 import { Message } from './component/chat/Message'
+import { Evaluation } from "./component/Evaluation";
+
 
 import React, { useState, useRef, useEffect } from "react";
 import { Plane } from "lucide-react";
@@ -32,6 +34,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(`session_${Date.now()}`);
   const [showDetails, setShowDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState("planner");
+
 
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState("");
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
@@ -342,100 +346,107 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      <Header 
+      <Header
         awaitingUserInput={awaitingUserInput}
         showDetails={showDetails}
         setShowDetails={setShowDetails}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
       />
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className={`grid grid-cols-1 ${showDetails ? "lg:grid-cols-3" : ""} gap-6`}>
-          
-          {/* --- Main Chat Column --- */}
-          <div className={showDetails ? "lg:col-span-2" : "w-full"}>
-            
-            {messages.length === 0 && (
-              <QuickActions setInput={setInput} showDetails={showDetails} />
-            )}
+        {activeTab === "planner" ? (
+          <div
+            className={`grid grid-cols-1 ${
+              showDetails ? "lg:grid-cols-3" : ""
+            } gap-6`}
+          >
+            {/* --- Main Chat Column --- */}
+            <div className={showDetails ? "lg:col-span-2" : "w-full"}>
+              {messages.length === 0 && (
+                <QuickActions setInput={setInput} showDetails={showDetails} />
+              )}
 
-            <div className="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden flex flex-col h-[600px]">
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {messages.length === 0 && !currentStreamingMessage ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center">
-                    <div className="bg-gradient-to-br from-purple-100 to-pink-100 p-8 rounded-3xl mb-4">
-                      <Plane className="w-16 h-16 text-purple-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">
-                      Start Planning Your Adventure
-                    </h3>
-                    <p className="text-gray-600 max-w-md">
-                      Tell me where you want to go, when you'd like to travel,
-                      and what you're interested in.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {messages.map((msg, idx) => (
-                      <Message key={idx} msg={msg} />
-                    ))}
-
-                    {currentStreamingMessage && (
-                       <div className="flex justify-start">
-                        <div className="max-w-[85%] rounded-2xl px-6 py-4 shadow-sm bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none">
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                            {currentStreamingMessage}
-                          </p>
-                          <span className="inline-block w-2 h-4 bg-purple-600 animate-pulse ml-1"></span>
-                        </div>
+              <div className="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden flex flex-col h-[600px]">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  {messages.length === 0 && !currentStreamingMessage ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center">
+                      <div className="bg-gradient-to-br from-purple-100 to-pink-100 p-8 rounded-3xl mb-4">
+                        <Plane className="w-16 h-16 text-purple-600" />
                       </div>
-                    )}
-                  </>
-                )}
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">
+                        Start Planning Your Adventure
+                      </h3>
+                      <p className="text-gray-600 max-w-md">
+                        Tell me where you want to go, when you'd like to travel,
+                        and what you're interested in.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {messages.map((msg, idx) => (
+                        <Message key={idx} msg={msg} />
+                      ))}
 
-                {processingSteps.length > 0 && (
-                  <ProcessingSteps steps={processingSteps} />
-                )}
-                
-                <div ref={messagesEndRef} />
+                      {currentStreamingMessage && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[85%] rounded-2xl px-6 py-4 shadow-sm bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {currentStreamingMessage}
+                            </p>
+                            <span className="inline-block w-2 h-4 bg-purple-600 animate-pulse ml-1"></span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {processingSteps.length > 0 && (
+                    <ProcessingSteps steps={processingSteps} />
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <ChatInput
+                  input={input}
+                  setInput={setInput}
+                  isLoading={isLoading}
+                  awaitingUserInput={awaitingUserInput}
+                  sessionId={sessionId}
+                  showOptionsMenu={showOptionsMenu}
+                  setShowOptionsMenu={setShowOptionsMenu}
+                  withReasoning={withReasoning}
+                  toolsEnabled={withTools}
+                  plannerMode={withPlanner}
+                  onSubmit={handleSubmit}
+                  onReasoningToggle={handleReasoningToggle}
+                  onToolsToggle={handleToolsToggle}
+                  onPlannerToggle={handlePlannerToggle}
+                  onReset={handleReset}
+                  onClear={clearConversation}
+                />
               </div>
-
-              <ChatInput
-                input={input}
-                setInput={setInput}
-                isLoading={isLoading}
-                awaitingUserInput={awaitingUserInput}
-                sessionId={sessionId}
-                showOptionsMenu={showOptionsMenu}
-                setShowOptionsMenu={setShowOptionsMenu}
-                withReasoning={withReasoning}
-                toolsEnabled={withTools}
-                plannerMode={withPlanner}
-                onSubmit={handleSubmit}
-                onReasoningToggle={handleReasoningToggle}
-                onToolsToggle={handleToolsToggle}
-                onPlannerToggle={handlePlannerToggle}
-                onReset={handleReset}
-                onClear={clearConversation}
-              />
             </div>
+
+            {/* --- Details Sidebar Column --- */}
+            {showDetails && (
+              <div className="lg:col-span-1">
+                <TripDetailsSidebar
+                  agentState={agentState}
+                  isEditing={isEditing}
+                  editablePlan={editablePlan || {}}
+                  setEditablePlan={setEditablePlan}
+                  onEdit={handleEdit}
+                  onUpdatePlan={handleUpdatePlan}
+                  onCancelEdit={handleCancelEdit}
+                />
+              </div>
+            )}
           </div>
-
-          {/* --- Details Sidebar Column --- */}
-          {showDetails && (
-            <div className="lg:col-span-1">
-              <TripDetailsSidebar
-                agentState={agentState}
-                isEditing={isEditing}
-                editablePlan={editablePlan || {}}
-                setEditablePlan={setEditablePlan}
-                onEdit={handleEdit}
-                onUpdatePlan={handleUpdatePlan}
-                onCancelEdit={handleCancelEdit}
-              />
-            </div>
-          )}
-        </div>
+        ) : (
+          <Evaluation />
+        )}
       </div>
     </div>
   );

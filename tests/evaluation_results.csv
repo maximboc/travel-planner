@@ -1,0 +1,81 @@
+id,user_prompt,agent_response,conditions,analysis,relevance,helpfulness,logic
+I'm planning my first trip to Japan for 10 days. I want to see Tokyo and Kyoto. What is the best way to travel between them and which neighborhoods should I look for hotels in?,I'm planning my first trip to Japan for 10 days. I want to see Tokyo and Kyoto. What is the best way to travel between them and which neighborhoods should I look for hotels in?,"I need a bit more information to plan your trip. Could you please provide: departure city, budget?",Should mention Shinkansen (Bullet Train) and suggest areas like Shinjuku/Shibuya for Tokyo and Gion/Shimogyo for Kyoto.,"The AI's response is overly cautious and doesn't provide any specific advice or guidance, instead asking for additional information that isn't necessary to answer the original question. This makes it seem like the AI is not confident in its ability to provide helpful travel advice.
+
+Relevance",2,1,9
+I want to visit Rome Florence and Venice in one week. Is this too rushed? Recommend a logical order to visit them by train.,I want to visit Rome Florence and Venice in one week. Is this too rushed? Recommend a logical order to visit them by train.,"I couldn't extract all the necessary details for your trip. Could you please provide:
+- Where do you want to go?
+- Where are you traveling from?
+- When do you want to depart?
+- When do you want to return?
+- What's your budget?",Should validate that it is busy but doable. Order should be geographical (e.g. North to South or vice versa).,"The AI's response is overly cautious and doesn't address the specific question asked, which was about visiting Rome, Florence, and Venice in one week. Instead of providing a helpful suggestion or advice on how to plan the trip, it asks for general information that could be provided at any time.
+
+Relevance",2,0,10
+I'm visiting NYC alone. Which areas should I avoid at night and what is the safest way to get from JFK to Manhattan?,I'm visiting NYC alone. Which areas should I avoid at night and what is the safest way to get from JFK to Manhattan?,"I need a bit more information to plan your trip. Could you please provide: departure city, return date, budget?",Should mention avoiding unlit parks or specific outskirts at night. Should suggest AirTrain + Subway or Taxi/Uber for JFK.,"The AI's response is completely off-topic and doesn't address the user's specific question about areas to avoid at night in NYC or the safest way to get from JFK to Manhattan. Instead, it asks for additional information that isn't relevant to answering the original question.
+
+Relevance",0,0,10
+Give me 5 tips for eating cheaply in Paris. I don't need specific restaurant names just general advice on what to buy and where.,Give me 5 tips for eating cheaply in Paris. I don't need specific restaurant names just general advice on what to buy and where.,"I need a bit more information to plan your trip. Could you please provide: destination, departure city, departure date, return date, budget?",Should mention boulangeries supermarkets avoiding main tourist squares and 'formule midi' (lunch specials).,"The AI's response is completely off-topic and fails to address the user's question about eating cheaply in Paris. Instead, it asks for general travel information that has no bearing on the original query.
+
+Relevance",0,0,10
+What are the most stroller-friendly transport options in London? Should I take the Tube or the bus?,What are the most stroller-friendly transport options in London? Should I take the Tube or the bus?,"I need a bit more information to plan your trip. Could you please provide: return date, budget?",Should identify buses as generally more accessible than the Tube (due to stairs/lack of elevators in old stations).,"The AI's response is unhelpful and irrelevant to the user's question about stroller-friendly transport options in London. Instead of providing advice, it asks for additional information that is not necessary to answer the original question.
+
+Relevance",2,0,10
+I am a strict vegan going to Madrid. What kind of dishes should I look for on menus and what common mistakes should I avoid?,I am a strict vegan going to Madrid. What kind of dishes should I look for on menus and what common mistakes should I avoid?,"I need a bit more information to plan your trip. Could you please provide: departure city, return date, budget?",Should warn about ham/tuna in salads. Suggest Gazpacho Pimientos de Padrón etc.,"The AI's response is completely off-topic and doesn't address the user's question about vegan options in Madrid. Instead, it asks for irrelevant information that has no bearing on finding suitable food options.
+
+Relevance",0,0,10
+My 70-year-old mother is coming to Lisbon. She can't walk up steep hills. What specific districts should we stay in to avoid hills?,My 70-year-old mother is coming to Lisbon. She can't walk up steep hills. What specific districts should we stay in to avoid hills?,"I need a bit more information to plan your trip. Could you please provide: departure city, return date, budget?",Should mention Baixa (flat) or Parque das Nações. Should warn about Alfama or Bairro Alto being hilly.,"The AI's response is completely off-topic and doesn't address the specific question about avoiding hills in Lisbon. It asks for irrelevant information that has no bearing on the original query.
+
+Relevance",0,0,10
+I want to visit Iceland in December. What specific clothing layers do I need? Is driving safe for a tourist?,I want to visit Iceland in December. What specific clothing layers do I need? Is driving safe for a tourist?,"I need a bit more information to plan your trip. Could you please provide: departure city, return date, budget?",Should emphasize thermal layers waterproofs and windbreakers. Should warn about icy roads limited daylight and wind.,"The AI's response is completely off-topic and doesn't address the user's specific question about clothing layers and driving safety in Iceland. Instead, it asks for general information that could be relevant to planning a trip, but not directly related to the user's inquiry.
+
+Relevance",0,2,10
+I need to work remotely from Bali. Which area has the most reliable internet reliability: Canggu Ubud or Uluwatu?,I need to work remotely from Bali. Which area has the most reliable internet reliability: Canggu Ubud or Uluwatu?,"I couldn't understand your travel request. Could you please tell me:
+- Where do you want to go?
+- Where are you traveling from?
+- When do you want to depart?
+- When do you want to return?
+- What's your budget?",Should generally identify Canggu or Ubud as better for coworking spaces than remote parts of Uluwatu.,"The AI's response completely disregards the user's specific question about internet reliability in Bali and instead asks for generic travel information. This is a clear case of not understanding or misinterpreting the user's query, leading to an unhelpful and irrelevant response.
+
+Relevance",0,0,10
+I'm driving through Germany with a dog. Are dogs generally allowed in restaurants there? What are the rules?,I'm driving through Germany with a dog. Are dogs generally allowed in restaurants there? What are the rules?,"I couldn't extract all the necessary details for your trip. Could you please provide:
+- Where do you want to go?
+- Where are you traveling from?
+- When do you want to depart?
+- When do you want to return?
+- What's your budget?",Should mention Germany is very dog-friendly but dogs are usually not allowed in grocery stores/bakeries.,"The AI's response is completely off-topic and fails to address the user's specific question about dog policies in German restaurants. Instead, it asks for general travel details that are not relevant to answering the original query.
+
+Relevance",0,0,10
+We want a beach holiday in Thailand but hate partying. Which islands should we avoid and which ones are quieter?,We want a beach holiday in Thailand but hate partying. Which islands should we avoid and which ones are quieter?,"I need a bit more information to plan your trip. Could you please provide: departure city, return date, budget?",Should advise avoiding Koh Phangan (Full Moon Party) or Patong Beach. Suggest Koh Lanta or Koh Chang.,"The AI's response is a non sequitur, as it asks for additional information that is not relevant to answering the user's question about which islands in Thailand are quieter. This type of response can be frustrating for users who are looking for specific advice.
+
+Relevance",2,0,10
+I want to see Ancient Greek history. Aside from Athens what is one other major region I should prioritize?,I want to see Ancient Greek history. Aside from Athens what is one other major region I should prioritize?,"I need a bit more information to plan your trip. Could you please provide: destination, departure city, departure date, return date, budget?",Should suggest the Peloponnese (Olympia/Mycenae) or Delphi or Crete (Knossos).,"The AI's response is completely off-topic and doesn't address the user's question at all. Instead of providing advice on Ancient Greek history, it asks for irrelevant information that would be necessary for a general trip planning service, but not for answering the specific question about prioritizing regions to see Ancient Greek history.
+
+Relevance",0,0,10
+I'm going hiking in Patagonia. What are the key items I might forget to pack? When is the best season to go?,I'm going hiking in Patagonia. What are the key items I might forget to pack? When is the best season to go?,"I need a bit more information to plan your trip. Could you please provide: departure city, departure date, return date, budget?",Should suggest Summer (Dec-Feb). Items: Layers strong wind protection sun protection (ozone hole).,"The AI's response is overly broad and doesn't address the specific question asked about packing for a hiking trip in Patagonia. It also seems to be asking for unnecessary information, such as departure city and budget, which aren't relevant to providing advice on what to pack or when to go.
+
+Relevance",2,0,8
+I am invited to a dinner at a local's house in Morocco. What is the proper etiquette? Should I bring a gift?,I am invited to a dinner at a local's house in Morocco. What is the proper etiquette? Should I bring a gift?,"I need a bit more information to plan your trip. Could you please provide: departure city, departure date, return date, budget?",Should mention removing shoes washing hands bringing a small gift (pastries/fruit) and eating with the right hand.,"The AI's response is completely off-topic and fails to address the user's question about dinner etiquette in Morocco. Instead, it asks for irrelevant information that has no bearing on the situation.
+
+Relevance",0,0,10
+I want to experience Berlin techno culture. What is the dress code generally like? Do I need to buy tickets in advance?,I want to experience Berlin techno culture. What is the dress code generally like? Do I need to buy tickets in advance?,"I couldn't extract all the necessary details for your trip. Could you please provide:
+- Where do you want to go?
+- Where are you traveling from?
+- When do you want to depart?
+- When do you want to return?
+- What's your budget?",Should mention casual/dark/black clothing (no suits). Advance tickets or door selection policies (Berghain logic).,"The AI's response is completely off-topic and fails to address the user's specific question about Berlin techno culture. Instead of providing information or advice, it asks for generic trip-planning details that are not relevant to the original query.
+
+Relevance",0,0,10
+What is the best train connection from Hawaii to California?,What is the best train connection from Hawaii to California?,"I need a bit more information to plan your trip. Could you please provide: return date, budget?",MUST correct the user: There are no trains connecting Hawaii to the mainland (ocean). Flights only.,"The AI's response is overly broad and doesn't directly address the user's question about train connections from Hawaii to California. Instead of providing a clear answer, it asks for additional information that could be irrelevant to answering the original question.
+
+Relevance",2,4,0
+Can I use US Dollars directly in shops in London or do I need to exchange money?,Can I use US Dollars directly in shops in London or do I need to exchange money?,"I need a bit more information to plan your trip. Could you please provide: destination, departure city, return date, budget?",MUST correct the user: GBP (Pounds) is required. USD is not accepted in shops.,"The AI's response is completely off-topic and fails to address the user's question about using US Dollars in London. Instead, it asks for unnecessary information that has no bearing on the original query.
+
+Relevance",0,0,0
+I am a US citizen going to Vietnam. Can I just show up or do I need a visa beforehand?,I am a US citizen going to Vietnam. Can I just show up or do I need a visa beforehand?,"I need a bit more information to plan your trip. Could you please provide: departure date, return date, budget?",MUST advise checking visa requirements (E-visa usually required). Cannot just 'show up' like in Europe.,"The AI's response is completely off-topic and doesn't address the user's question at all. It asks for additional information that isn't relevant to answering whether a visa is required for entry into Vietnam.
+
+Relevance",0,0,0
+I want to see the Cherry Blossoms in Tokyo in September. Is that a good time?,I want to see the Cherry Blossoms in Tokyo in September. Is that a good time?,"I need a bit more information to plan your trip. Could you please provide: departure city, budget?",MUST correct the user: Cherry Blossoms are in Spring (March/April) not September.,"The AI's response is overly broad and doesn't directly address the user's question about the timing of cherry blossom viewing in Tokyo. Instead, it asks for additional information that isn't relevant to answering the original query.
+
+Relevance",2,0,5
+I have a call at 9 AM New York time. What time will that be in Sydney?,I have a call at 9 AM New York time. What time will that be in Sydney?,"I need a bit more information to plan your trip. Could you please provide: departure date, return date, budget?",Should provide a rough calculation (Sydney is usually ~14-16 hours ahead) placing the call late at night or next morning.,"The AI's response is completely off-topic and fails to address the user's question about converting a time from New York to Sydney. Instead, it asks for unrelated information such as departure date, return date, and budget, which are not relevant to the task at hand.
+
+Relevance",0,0,0

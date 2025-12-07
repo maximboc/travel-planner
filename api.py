@@ -11,6 +11,11 @@ from src.utils.monitoring import TokenUsageTracker
 
 from src.graph import create_travel_agent_graph
 from src.states.planner import PlanDetailsState
+import os
+from pathlib import Path
+import asyncio
+import sys
+import csv
 
 
 load_dotenv()
@@ -312,6 +317,82 @@ async def chat_stream_endpoint(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+async def stream_evaluation_events():
+    """Stream events from the evaluation script."""
+    try:
+        env = os.environ.copy()
+        project_root = str(Path.cwd())
+        env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "tests/test_agent.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        yield f"data: {json.dumps({'type': 'start', 'message': 'Evaluation process started...'})}\n\n"
+
+        async def stream_output(stream, type):
+            while not stream.at_eof():
+                line = await stream.readline()
+                if line:
+                    yield f"data: {json.dumps({'type': type, 'line': line.decode().strip()})}\n\n"
+        
+        async for item in stream_output(process.stdout, "stdout"):
+            yield item
+        
+        async for item in stream_output(process.stderr, "stderr"):
+            yield item
+
+        await process.wait()
+        exit_code = process.returncode
+        if exit_code == 0:
+            yield f"data: {json.dumps({'type': 'end', 'message': 'Evaluation completed successfully.'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Evaluation failed with exit code {exit_code}.'})}\n\n"
+    except Exception as e:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+
+@app.get("/run_evaluation_stream")
+async def run_evaluation_stream_endpoint():
+    """Streaming endpoint for running the evaluation script."""
+    return StreamingResponse(
+        stream_evaluation_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/get_evaluation_results")
+async def get_evaluation_results():
+    """Endpoint to get evaluation results."""
+    results = []
+    file_path = Path("tests") / "evaluation_results.csv"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Evaluation results not found. Please run the evaluation first.")
+    try:
+        with open(file_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                for key in ["relevance", "helpfulness", "logic"]:
+                    if key in row and isinstance(row[key], str):
+                        try:
+                            row[key] = int(row[key])
+                        except (ValueError, TypeError):
+                            pass
+                results.append(row)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 
 if __name__ == "__main__":
