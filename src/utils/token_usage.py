@@ -9,19 +9,20 @@ from langchain_core.outputs import LLMResult
 
 
 class TokenUsageTracker(BaseCallbackHandler):
-    """
-    Implements the tracking procedure defined in Section 7.
-    Logs execution details to costs.csv.
-    """
-
-    def __init__(self, scenario_id: str, model_name: str, log_file: str = "costs.csv"):
+    def __init__(
+        self,
+        scenario_id: str,
+        model_name: str,
+        model_provider: str,
+        log_file: str = "costs.csv",
+    ):
         self.scenario_id = scenario_id
         self.model_name = model_name
+        self.model_provider = model_provider
         self.log_file = log_file
         self.current_call_id: str = ""
         self.start_time: float = 0.0
 
-        # Initialize CSV with headers if it doesn't exist
         self._init_csv()
 
     def _init_csv(self):
@@ -29,7 +30,6 @@ class TokenUsageTracker(BaseCallbackHandler):
         if not file_exists:
             with open(self.log_file, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                # Headers as requested in the protocol
                 writer.writerow(
                     [
                         "timestamp",
@@ -53,20 +53,17 @@ class TokenUsageTracker(BaseCallbackHandler):
         tags: List[str] = None,
         **kwargs: Any,
     ) -> Any:
-        """Capture the start time and generate a unique call ID."""
         self.start_time = time.time()
         self.current_call_id = str(uuid.uuid4())
         self.node_name = "Unknown_Node"
         if tags:
-            # Find the node name (doesn't contain ':')
             node_tag = next((tag for tag in tags if ":" not in tag), None)
             if node_tag:
                 self.node_name = node_tag
-            else: # If no specific node tag found, join all tags for debugging/information
+            else:
                 self.node_name = ",".join(tags) if tags else "Unknown_Node"
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> Any:
-        """Capture end time, calculate latency, and extract token usage."""
         end_time = time.time()
         latency_ms: float = (end_time - self.start_time) * 1000
         timestamp: str = datetime.now().isoformat()
@@ -100,7 +97,6 @@ class TokenUsageTracker(BaseCallbackHandler):
         except Exception as e:
             print(f"Warning: Could not extract token usage: {e}")
 
-        # Log to CSV
         with open(self.log_file, mode="a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(
@@ -109,7 +105,7 @@ class TokenUsageTracker(BaseCallbackHandler):
                     self.scenario_id,
                     self.current_call_id,
                     self.model_name,
-                    "Ollama/Local",
+                    self.model_provider,
                     prompt_tokens,
                     completion_tokens,
                     total_tokens,
@@ -133,10 +129,10 @@ class TokenUsageTracker(BaseCallbackHandler):
                     self.scenario_id,
                     self.current_call_id,
                     self.model_name,
-                    "Ollama/Local",
+                    self.model_provider,
                     0,
                     0,
-                    0,  # Tokens unknown on error
+                    0,
                     f"{latency_ms:.2f}",
                     "ERROR",
                     str(error),

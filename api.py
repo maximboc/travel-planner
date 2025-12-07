@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 import json
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Dict, Any
 from dotenv import load_dotenv
 import uvicorn
 import os
@@ -13,9 +13,10 @@ import asyncio
 import sys
 import csv
 
-from src.utils import TokenUsageTracker, StateSnapshotHandler
+from src.llm import LLMWrapper
+from src.utils import TokenUsageTracker, CheckpointManager
 from src.graph import create_travel_agent_graph
-from src.states.planner import PlanDetailsState
+from src.states import PlanDetailsState
 
 
 load_dotenv()
@@ -29,7 +30,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-agent_app = create_travel_agent_graph()
+
+HF_TOKEN = os.getenv("HF_TOKEN", None)
+BASE_URL = os.getenv("BASE_URL", None)
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3.1:8b")
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "ollama")
+llm = LLMWrapper(
+    provider=MODEL_PROVIDER,
+    model=MODEL_NAME,
+    temperature=0,
+    base_url=BASE_URL,
+    api_key=HF_TOKEN,
+)
+agent_app = create_travel_agent_graph(llm=llm)
+
+checkpoint_manager = CheckpointManager(checkpoint_dir="checkpoints")
 
 
 class ChatRequest(BaseModel):
@@ -50,6 +65,24 @@ class UpdatePlanRequest(BaseModel):
     departure_date: Optional[str] = None
     arrival_date: Optional[str] = None
     budget: Optional[float] = None
+
+
+class CheckpointExportRequest(BaseModel):
+    session_id: str
+    checkpoint_id: Optional[str] = None
+    include_history: bool = False
+
+
+class CheckpointImportRequest(BaseModel):
+    session_id: str
+    checkpoint_data: Dict[str, Any]
+    create_new_thread: bool = False
+
+
+class ReplayRequest(BaseModel):
+    session_id: str
+    checkpoint_id: str
+    message: Optional[str] = None
 
 
 def serialize_state_for_frontend(state: dict) -> dict:
@@ -108,42 +141,217 @@ def serialize_state_for_frontend(state: dict) -> dict:
     return frontend_state
 
 
+@app.post("/checkpoint/export")
+async def export_checkpoint(request: CheckpointExportRequest):
+    try:
+        if request.include_history:
+            history_data = checkpoint_manager.export_thread_history(
+                agent_app.checkpointer,
+                request.session_id,
+                output_file=f"thread_{request.session_id}_history.json",
+            )
+            return {
+                "status": "success",
+                "message": "Thread history exported successfully",
+                "data": history_data,
+                "filename": f"thread_{request.session_id}_history.json",
+            }
+        else:
+            checkpoint_data = checkpoint_manager.export_checkpoint_to_json(
+                agent_app.checkpointer,
+                request.session_id,
+                checkpoint_id=request.checkpoint_id,
+                output_file=f"checkpoint_{request.session_id}.json",
+            )
+            return {
+                "status": "success",
+                "message": "Checkpoint exported successfully",
+                "data": checkpoint_data,
+                "filename": f"checkpoint_{request.session_id}.json",
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/checkpoint/import")
+async def import_checkpoint(request: CheckpointImportRequest):
+    try:
+        new_thread_id = (
+            None if not request.create_new_thread else f"{request.session_id}_imported"
+        )
+
+        result = checkpoint_manager.import_checkpoint_from_json(
+            agent_app.checkpointer, request.checkpoint_data, new_thread_id=new_thread_id
+        )
+
+        config = {"configurable": {"thread_id": result["thread_id"]}}
+        updated_state = serialize_state_for_frontend(agent_app.get_state(config).values)
+
+        return {
+            "status": "success",
+            "message": "Checkpoint imported successfully",
+            "import_info": result,
+            "state": updated_state,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/checkpoint/upload")
+async def upload_checkpoint(
+    file: UploadFile = File(...),
+    session_id: str = None,
+    create_new_thread: bool = False,
+):
+    try:
+        contents = await file.read()
+        checkpoint_data = json.loads(contents)
+
+        if create_new_thread:
+            new_thread_id = (
+                f"{session_id or 'uploaded'}_{int(asyncio.get_event_loop().time())}"
+            )
+        else:
+            new_thread_id = session_id
+
+        result = checkpoint_manager.import_checkpoint_from_json(
+            agent_app.checkpointer, checkpoint_data, new_thread_id=new_thread_id
+        )
+
+        config = {"configurable": {"thread_id": result["thread_id"]}}
+        updated_state = serialize_state_for_frontend(agent_app.get_state(config).values)
+
+        return {
+            "status": "success",
+            "message": f"Checkpoint uploaded from {file.filename}",
+            "import_info": result,
+            "state": updated_state,
+        }
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/checkpoint/download/{filename}")
+async def download_checkpoint(filename: str):
+    file_path = checkpoint_manager.checkpoint_dir / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Checkpoint file not found")
+
+    return FileResponse(
+        path=file_path, filename=filename, media_type="application/json"
+    )
+
+
+@app.get("/checkpoint/list")
+async def list_checkpoints():
+    try:
+        checkpoints = checkpoint_manager.list_saved_checkpoints()
+        return {"status": "success", "checkpoints": checkpoints}
+    except Exception as e:
+        print(e.__str__())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/checkpoint/history/{session_id}")
+async def get_checkpoint_history(session_id: str):
+    try:
+        config = {"configurable": {"thread_id": session_id}}
+        history = list(agent_app.get_state_history(config))
+
+        history_data = []
+        for state in history:
+            history_data.append(
+                {
+                    "checkpoint_id": state.config["configurable"].get("checkpoint_id"),
+                    "parent_checkpoint_id": (
+                        state.parent_config["configurable"].get("checkpoint_id")
+                        if state.parent_config
+                        else None
+                    ),
+                    "next": list(state.next) if state.next else [],
+                    "metadata": state.metadata,
+                    "created_at": (
+                        state.created_at if state.created_at else None
+                    ),
+                    "state_preview": serialize_state_for_frontend(state.values),
+                }
+            )
+
+        return {"status": "success", "thread_id": session_id, "history": history_data}
+    except Exception as e:
+        print(e.__str__())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/checkpoint/replay")
+async def replay_checkpoint(request: ReplayRequest):
+    try:
+        config = {
+            "configurable": {
+                "thread_id": request.session_id,
+                "checkpoint_id": request.checkpoint_id,
+            }
+        }
+
+        if request.message:
+            agent_app.invoke(
+                {"messages": [HumanMessage(content=request.message)]}, config=config
+            )
+        else:
+            agent_app.invoke(None, config=config)
+
+        final_state = agent_app.get_state(config)
+        frontend_state = serialize_state_for_frontend(final_state.values)
+
+        return {
+            "status": "success",
+            "message": "Checkpoint replayed successfully",
+            "state": frontend_state,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/checkpoint/clear/{session_id}")
+async def clear_thread_checkpoints(session_id: str):
+    try:
+        return {
+            "status": "success",
+            "message": f"Checkpoints for thread {session_id} cleared (if supported by checkpointer)",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/chat/update_plan")
 async def update_plan(request: UpdatePlanRequest):
-
     config = {"configurable": {"thread_id": request.session_id}}
 
     try:
-
         current_state = agent_app.get_state(config)
-
         current_plan = current_state.values.get("plan") if current_state else None
 
         if not current_plan:
-
             current_plan = PlanDetailsState(
                 destination=request.destination,
                 departure_date=request.departure_date,
                 arrival_date=request.arrival_date,
                 budget=request.budget,
             )
-
         else:
-
             if request.destination is not None:
                 current_plan.destination = request.destination
-
             if request.departure_date is not None:
                 current_plan.departure_date = request.departure_date
-
             if request.arrival_date is not None:
                 current_plan.arrival_date = request.arrival_date
-
             if request.budget is not None:
                 current_plan.budget = request.budget
 
         agent_app.update_state(config, {"plan": current_plan})
-
         updated_state_frontend = serialize_state_for_frontend(
             agent_app.get_state(config).values
         )
@@ -153,16 +361,13 @@ async def update_plan(request: UpdatePlanRequest):
             "message": "Plan updated successfully",
             "state": updated_state_frontend,
         }
-
     except Exception as e:
-
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/chat/configure")
 async def configure_chat(request: ConfigureRequest):
     """Endpoint to configure agent behavior."""
-
     config = {"configurable": {"thread_id": request.session_id}}
 
     try:
@@ -178,7 +383,6 @@ async def configure_chat(request: ConfigureRequest):
             "status": "success",
             "message": f"Configuration set to with_reasoning={request.with_reasoning}, with_tools={request.with_tools}, with_planner={request.with_planner}",
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -188,14 +392,13 @@ async def stream_agent_events(
 ) -> AsyncGenerator[str, None]:
     """Stream events from LangGraph execution"""
 
-    tracker = TokenUsageTracker(scenario_id=session_id, model_name="llama3.1:8b")
-    state_saver = StateSnapshotHandler(
-        scenario_id=session_id, output_dir="outputs", save_intermediate=True
+    tracker = TokenUsageTracker(
+        scenario_id=session_id, model_name=MODEL_PROVIDER, model_provider=MODEL_PROVIDER
     )
 
     config = {
         "configurable": {"thread_id": session_id},
-        "callbacks": [tracker, state_saver],
+        "callbacks": [tracker],
     }
 
     snapshot = agent_app.get_state(config)
@@ -304,10 +507,7 @@ async def stream_evaluation_events(
         project_root = str(Path.cwd())
         env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
-        cmd = [
-            sys.executable,
-            "tests/test_agent.py",
-        ]
+        cmd = [sys.executable, "tests/test_agent.py"]
         if use_planner:
             cmd.append("--use-planner")
         if use_tools:

@@ -30,7 +30,7 @@ def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
 
     messages = state.messages
 
-    PROMPT = f'''Your task: **Extract passenger information**.
+    PROMPT = f"""Your task: **Extract passenger information**.
 
 ----------------------------
 LOGIC RULES
@@ -54,7 +54,7 @@ Return JSON:
     "infants": null or number,
     "travel_class": null or "ECONOMY"/"BUSINESS"/"FIRST",
     "confidence": "high/medium/low"
-}}'''
+}}"""
 
     response = llm.invoke(
         [
