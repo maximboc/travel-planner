@@ -87,7 +87,7 @@ def main():
     judged_llm = create_travel_agent_graph(
         use_planner=args.use_planner,
         use_tools=args.use_tools,
-        use_reasoning=args.use_reasoning,
+        force_reasoning=args.use_reasoning,
     )
     judged_llm_name = "Travel Planner Agent"
     print(f"    - Judged LLM: {judged_llm_name}")
