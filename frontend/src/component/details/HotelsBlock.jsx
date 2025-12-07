@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Hotel, ChevronDown, ChevronUp, Phone, Calendar, Users, Bed } from 'lucide-react';
+import { Hotel, ChevronDown, ChevronUp, Phone, Calendar, Users, Bed, MapPin } from 'lucide-react';
 
 export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
@@ -67,49 +67,64 @@ export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false }) =
                 )}
 
                 {/* Header Info */}
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-800 leading-tight">
-                      {hotel.name}
-                    </p>
-                    {hotel.location?.city_code && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {hotel.location.city_code}
-                      </p>
-                    )}
-                  </div>
-                  {firstOffer?.price && (
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-emerald-700">
-                        {formatPrice(firstOffer.price.total, firstOffer.price.currency)}
-                      </p>
-                      <p className="text-[10px] text-gray-500">total</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Detailed Info */}
-                <div className="mt-3 pt-3 border-t border-emerald-100 space-y-3">
-                  {/* Location & Contact */}
-                  <div className="space-y-2">
-                    {hotel.contact?.phone && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>{hotel.contact.phone}</span>
-                      </div>
-                    )}
-                    {hotel.contact?.fax && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>Fax: {hotel.contact.fax}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Offers */}
-                  {hotel.offers && hotel.offers.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-gray-700 uppercase">
+                                  <div className="flex justify-between items-start gap-2">
+                                  <div className="flex-1">
+                                    <p className="font-bold text-gray-800 leading-tight">
+                                      {hotel.name}
+                                    </p>
+                                    {hotel.location?.latitude && hotel.location?.longitude && (
+                                       <a 
+                                       href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.name + " " + hotel.location.city_code)}`}
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       className="text-xs text-gray-500 mt-0.5"
+                                     >
+                                       {hotel.location.city_code}
+                                     </a>
+                                    )}
+                                  </div>
+                                  {firstOffer?.price && (
+                                    <div className="text-right shrink-0">
+                                      <p className="font-bold text-emerald-700">
+                                        {formatPrice(firstOffer.price.total, firstOffer.price.currency)}
+                                      </p>
+                                      <p className="text-[10px] text-gray-500">total</p>
+                                    </div>
+                                  )}
+                                </div>
+                
+                                {/* Detailed Info */}
+                                <div className="mt-3 pt-3 border-t border-emerald-100 space-y-3">
+                                  {/* Location & Contact */}
+                                  <div className="space-y-2">
+                                    {hotel.contact?.phone && (
+                                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                                        <Phone className="w-3.5 h-3.5" />
+                                        <span>{hotel.contact.phone}</span>
+                                      </div>
+                                    )}
+                                    {hotel.contact?.fax && (
+                                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                        <Phone className="w-3.5 h-3.5" />
+                                        <span>Fax: {hotel.contact.fax}</span>
+                                      </div>
+                                    )}
+                                     {hotel.location?.latitude && hotel.location?.longitude && (
+                                        <a
+                                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.name + " " + hotel.location.city_code)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-emerald-700 transition-colors"
+                                        >
+                                          <MapPin className="w-3.5 h-3.5" />
+                                          <span>View on Map</span>
+                                        </a>
+                                      )}
+                                  </div>
+                
+                                  {/* Offers */}
+                                  {hotel.offers && hotel.offers.length > 0 && (
+                                    <div className="space-y-2">                      <p className="text-xs font-semibold text-gray-700 uppercase">
                         Available Offers ({hotel.offers.length})
                       </p>
                       {hotel.offers.map((offer, idx) => (

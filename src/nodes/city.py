@@ -82,7 +82,9 @@ def city_resolver_node(
     plan.origin = origin_result.iata_code
     plan.destination = dest_result.iata_code
     state.city_code = dest_result.iata_code
+    state.destination_name = dest_result.name
     state.origin_code = origin_result.iata_code
+    state.origin_name = origin_result.name
     state.latitude = dest_result.latitude
     state.longitude = dest_result.longitude
     state.plan = plan
