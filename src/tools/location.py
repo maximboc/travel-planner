@@ -39,4 +39,3 @@ def get_user_location(ip_address: Optional[str] = None) -> str:
 # Example Usage:
 # print(get_user_location())              # Finds YOUR location (if running locally)
 # print(get_user_location("24.48.0.1"))   # Finds location of this specific IP
-

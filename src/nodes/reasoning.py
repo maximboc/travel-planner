@@ -61,7 +61,7 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
         and state.selected_hotel_index < len(state.hotel_data.hotels)
     ):
         hotel_cost = state.hotel_data.hotels[state.selected_hotel_index].price
-    
+
     # Critique Prompt
     prompt = f"""
     You are a Strict Travel Quality Control Agent.

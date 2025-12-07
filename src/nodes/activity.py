@@ -28,7 +28,7 @@ def activity_node(state: AgentState, amadeus_auth: AmadeusAuth):
     activity_finder = ActivitySearchTool(amadeus_auth=amadeus_auth)
 
     result: List[ActivityResultState] = activity_finder.invoke(
-        {"latitude": state.latitude, "longitude": state.longitude, "radius": 10}
+        {"location": plan.destination, "radius": 10}
     )
 
     if not result:

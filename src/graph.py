@@ -1,8 +1,10 @@
 import functools
 import os
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.memory import InMemorySaver
-from langchain_ollama import ChatOllama
+from src.llm import LLMWrapper
+
 
 from src.nodes import (
     activity_node,
@@ -20,7 +22,12 @@ from src.states import AgentState
 
 
 def create_travel_agent_graph(
-    use_planner: bool = True, use_tools: bool = True, force_reasoning: bool = None
+    llm: LLMWrapper,
+    use_planner: bool = True,
+    use_tools: bool = True,
+    force_reasoning: bool = None,
+    use_persistent_checkpointer: bool = True,
+    checkpoint_db_path: str = "checkpoints/checkpoints.db",
 ):
     AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY", "")
     AMADEUS_SECRET_KEY = os.getenv("AMADEUS_SECRET_KEY", "")
@@ -31,9 +38,6 @@ def create_travel_agent_graph(
             api_key=AMADEUS_API_KEY, api_secret=AMADEUS_SECRET_KEY
         )
 
-    llm = ChatOllama(model="llama3.1:8b", temperature=0)
-
-    # 2. Define Routing Logic
     def route_after_flight(state: AgentState):
         plan = state.plan
         if state.needs_user_input:
@@ -57,8 +61,6 @@ def create_travel_agent_graph(
         return "compiler"
 
     def route_after_compiler(state: AgentState):
-        # Logic: If force_reasoning is set (Testing), use it.
-        # Otherwise, check the state (Production).
         if force_reasoning is not None:
             return "reviewer" if force_reasoning else END
 
@@ -66,10 +68,8 @@ def create_travel_agent_graph(
             return "reviewer"
         return END
 
-    # 3. Build Graph
     workflow = StateGraph(AgentState)
 
-    # -- Add Universal Nodes --
     workflow.add_node(
         "city_resolver",
         functools.partial(
@@ -112,7 +112,6 @@ def create_travel_agent_graph(
         functools.partial(reviewer_node, llm=llm.with_config(tags=["reviewer"])),
     )
 
-    # -- Add Conditional Planner Node --
     if use_planner:
         workflow.add_node(
             "planner_agent",
@@ -123,10 +122,8 @@ def create_travel_agent_graph(
         workflow.add_edge(START, "planner_agent")
         workflow.add_edge("planner_agent", "city_resolver")
     else:
-        # If no planner, skip directly to city resolver
         workflow.add_edge(START, "city_resolver")
 
-    # -- Universal Edges --
     workflow.add_edge("city_resolver", "passenger_agent")
     workflow.add_edge("passenger_agent", "flight_agent")
 
@@ -147,4 +144,14 @@ def create_travel_agent_graph(
         "reviewer", check_review_condition_node, {"compiler": "compiler", END: END}
     )
 
-    return workflow.compile(checkpointer=InMemorySaver())
+    # if use_persistent_checkpointer:
+    #     os.makedirs(os.path.dirname(checkpoint_db_path), exist_ok=True)
+
+    #     conn = aiosqlite.connect(checkpoint_db_path, check_same_thread=False)
+    #     checkpointer = AsyncSqliteSaver(conn)
+    #     print(f"Using persistent SQLite checkpointer at {checkpoint_db_path}")
+    # else:
+    checkpointer = InMemorySaver()
+    print("Using in-memory checkpointer (not persistent)")
+
+    return workflow.compile(checkpointer=checkpointer)

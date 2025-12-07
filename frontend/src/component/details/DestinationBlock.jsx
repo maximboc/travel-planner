@@ -1,13 +1,13 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
 
-export const DestinationBlock = ({ plan, cityCode }) => {
+export const DestinationBlock = ({ plan, cityCode, destinationName }) => {
   const getGoogleMapsLink = (destination) => {
     if (!destination) return null;
     return `http://maps.google.com/?q=${encodeURIComponent(destination)}`;
   };
   
-  const mapsLink = getGoogleMapsLink(plan.destination);
+  const mapsLink = getGoogleMapsLink(destinationName || plan.destination);
 
   return (
     <div className="bg-purple-50 rounded-xl border border-purple-100 p-4">
@@ -17,11 +17,11 @@ export const DestinationBlock = ({ plan, cityCode }) => {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-bold text-lg text-gray-800">
-            {plan.destination}
+            {destinationName || plan.destination}
           </p>
           {cityCode && (
             <p className="text-sm text-gray-500">
-              {cityCode}
+              {plan.destination}
             </p>
           )}
         </div>

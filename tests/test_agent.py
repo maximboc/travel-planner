@@ -41,7 +41,6 @@ def run_batch_evaluation_for_travel_agent(
             state = AgentState()
             state.messages.append(HumanMessage(content=user_prompt))
 
-
             # The travel agent returns the full state
             final_state = judged_llm.invoke(state, config=config)
 
@@ -52,9 +51,7 @@ def run_batch_evaluation_for_travel_agent(
                 if final_state.get("messages"):
                     agent_response = final_state["messages"][-1].content
 
-            eval_result = run_single_evaluation(
-                user_prompt, agent_response, judge_llm
-            )
+            eval_result = run_single_evaluation(user_prompt, agent_response, judge_llm)
             results.append(
                 {
                     "id": user_prompt,
@@ -72,15 +69,25 @@ def run_batch_evaluation_for_travel_agent(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run batch evaluation for the travel agent.")
-    parser.add_argument('--use-planner', action='store_true', help='Enable the planner agent.')
-    parser.add_argument('--use-tools', action='store_true', help='Enable the tools for the agent.')
-    parser.add_argument('--use-reasoning', action='store_true', help='Enable the reasoning/review step.')
-    
+    parser = argparse.ArgumentParser(
+        description="Run batch evaluation for the travel agent."
+    )
+    parser.add_argument(
+        "--use-planner", action="store_true", help="Enable the planner agent."
+    )
+    parser.add_argument(
+        "--use-tools", action="store_true", help="Enable the tools for the agent."
+    )
+    parser.add_argument(
+        "--use-reasoning", action="store_true", help="Enable the reasoning/review step."
+    )
+
     args = parser.parse_args()
 
     print("🚀 Starting Batch Evaluation...")
-    print(f"Configuration: Planner={args.use_planner}, Tools={args.use_tools}, Reasoning={args.use_reasoning}")
+    print(
+        f"Configuration: Planner={args.use_planner}, Tools={args.use_tools}, Reasoning={args.use_reasoning}"
+    )
 
     # --- Create Agents ---
     # Create the agent to be judged
