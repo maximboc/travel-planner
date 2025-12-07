@@ -20,6 +20,8 @@ class CitySearchResult(BaseModel):
 
     name: str = Field(description="Name of the city or airport")
     iata_code: str = Field(description="IATA code of the city or airport")
+    latitude: Optional[float] = Field(description="Latitude of the city or airport")
+    longitude: Optional[float] = Field(description="Longitude of the city or airport")
 
 
 class CitySearchTool(BaseTool):
@@ -65,10 +67,22 @@ class CitySearchTool(BaseTool):
             if not data.get("data"):
                 return None
 
-            city_code = data["data"][0]["iataCode"]
-            name = data["data"][0].get("name", keyword)
+            location_data = data["data"][0]
+            city_code = location_data["iataCode"]
+            name = location_data.get("name", keyword)
+            geo_code = location_data.get("geoCode", {})
+            latitude = geo_code.get("latitude")
+            longitude = geo_code.get("longitude")
 
-            return CitySearchResult(name=name, iata_code=city_code)
+            if latitude is None or longitude is None:
+                return None
+
+            return CitySearchResult(
+                name=name,
+                iata_code=city_code,
+                latitude=latitude,
+                longitude=longitude,
+            )
 
         except Exception as e:
             print(f"Tool Error for {keyword}: {e}")

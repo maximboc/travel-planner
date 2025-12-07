@@ -40,7 +40,7 @@ def format_flights_for_llm_compact(results: list[FlightSearchResultState]) -> st
                     f"(stops: {seg.stops})"
                 )
 
-        lines.append("")  # separation
+        lines.append("")
 
     return "\n".join(lines).strip()
 

@@ -2,9 +2,10 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
-from src.tools import CitySearchTool, AmadeusAuth
+from src.tools import CitySearchTool, AmadeusAuth, CitySearchResult
 
 from src.states import AgentState, PlanDetailsState
+from typing import Optional, Tuple
 
 
 @traceable
@@ -19,7 +20,9 @@ def city_resolver_node(
         print("No plan found or awaiting user input, cannot resolve cities.")
         return state
 
-    def resolve_iata(location_name: str, location_type: str) -> tuple[str, bool]:
+    def resolve_iata(
+        location_name: str, location_type: str
+    ) -> Tuple[Optional[CitySearchResult], bool]:
         clean_name = location_name.split(",")[0].strip()
         print(f"Resolving code for: {clean_name}...")
 
@@ -30,7 +33,7 @@ def city_resolver_node(
 
             if search_result:
                 print(f"   ✅ API Found: {search_result.iata_code}")
-                return search_result.iata_code, True
+                return search_result, True
 
             print("   ⚠️ API returned null. Falling back to LLM knowledge...")
 
@@ -46,12 +49,17 @@ def city_resolver_node(
 
         if len(code) == 3 and code.isalpha() and code != "UNKNOWN":
             print(f"   🤖 LLM Resolved: {code}")
-            return code, True
+            return (
+                CitySearchResult(
+                    name=clean_name, iata_code=code, latitude=None, longitude=None
+                ),
+                True,
+            )
 
         print(f"   ❌ Could not resolve code for {clean_name}")
-        return "", False
+        return None, False
 
-    origin_code, origin_success = resolve_iata(plan.origin, "origin")
+    origin_result, origin_success = resolve_iata(plan.origin, "origin")
 
     if not origin_success:
         question = f"I couldn't identify the airport code for '{plan.origin}' (checked both API and my knowledge). Could you provide the specific IATA code?"
@@ -61,7 +69,7 @@ def city_resolver_node(
         state.last_node = "city_resolver"
         return Command(goto="compiler", update=state)
 
-    dest_code, dest_success = resolve_iata(plan.destination, "destination")
+    dest_result, dest_success = resolve_iata(plan.destination, "destination")
 
     if not dest_success:
         question = f"I couldn't identify the airport code for '{plan.destination}'. Could you provide the specific IATA code?"
@@ -71,14 +79,20 @@ def city_resolver_node(
         state.last_node = "city_resolver"
         return Command(goto="compiler", update=state)
 
-    plan.origin = origin_code
-    plan.destination = dest_code
-    state.city_code = dest_code
-    state.origin_code = origin_code
+    plan.origin = origin_result.iata_code
+    plan.destination = dest_result.iata_code
+    state.city_code = dest_result.iata_code
+    state.origin_code = origin_result.iata_code
+    state.latitude = dest_result.latitude
+    state.longitude = dest_result.longitude
     state.plan = plan
     state.needs_user_input = False
     state.validation_question = None
     state.last_node = None
 
-    print(f"   ✅ Route: {origin_code} -> {dest_code}")
+    print(f"   ✅ Route: {origin_result.iata_code} -> {dest_result.iata_code}")
+    if dest_result.latitude and dest_result.longitude:
+        print(
+            f"   🌍 Destination coordinates: {dest_result.latitude}, {dest_result.longitude}"
+        )
     return state

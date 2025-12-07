@@ -6,7 +6,8 @@ from langchain_core.messages import SystemMessage, AIMessage
 from langsmith import traceable
 from langgraph.types import Command
 
-from src.states import AgentState, PlanDetailsState
+from ..states import AgentState, PlanDetailsState
+from ..tools import get_user_location
 
 
 def planner_skipped(state: AgentState) -> bool:
@@ -44,7 +45,8 @@ LOGIC RULES
 ----------------------------
 - If the user says "tomorrow", interpret it relative to today ({today_str}).
 - If the user says "for a week", set arrival_date to departure_date + 7 days.
-- Confidence is "low" if any critical field is unclear or missing: destination, origin, departure_date
+- If the origin is not specified, leave it empty. It will be detected automatically.
+- Confidence is "low" if any critical field is unclear or missing: destination, departure_date
 - Optional fields may be left empty or false: hotel, activities.
 - ALWAYS output valid JSON. No extra text.
 
@@ -103,6 +105,11 @@ Return ONLY the JSON object.
         print(f"   ❓ {question}")
         return Command(goto="compiler", update=state)
 
+    if not plan_data.get("origin") or plan_data.get("origin") == "Unknown":
+        print("   🔍 Origin not found, attempting to resolve with IP address...")
+        plan_data["origin"] = get_user_location.invoke({})
+        print(f"   ✅ Origin resolved to: {plan_data['origin']}")
+
     confidence = plan_data.get("confidence", "medium")
     missing_fields = []
 
@@ -156,6 +163,10 @@ Return ONLY the JSON object.
     state.plan = plan
 
     if missing_fields or confidence == "low":
+        if "departure city" in missing_fields:
+            print(
+                "   ⚠️ Could not resolve origin automatically. Asking user for clarification."
+            )
         if missing_fields:
             missing_str = ", ".join(missing_fields)
             question = f"I need a bit more information to plan your trip. Could you please provide: {missing_str}?"
