@@ -318,16 +318,28 @@ async def chat_stream_endpoint(request: ChatRequest):
         },
     )
 
-async def stream_evaluation_events():
+async def stream_evaluation_events(
+    use_planner: bool = True, use_tools: bool = True, use_reasoning: bool = True
+):
     """Stream events from the evaluation script."""
     try:
         env = os.environ.copy()
         project_root = str(Path.cwd())
         env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
-        process = await asyncio.create_subprocess_exec(
+        cmd = [
             sys.executable,
             "tests/test_agent.py",
+        ]
+        if use_planner:
+            cmd.append("--use-planner")
+        if use_tools:
+            cmd.append("--use-tools")
+        if use_reasoning:
+            cmd.append("--use-reasoning")
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
@@ -339,10 +351,10 @@ async def stream_evaluation_events():
                 line = await stream.readline()
                 if line:
                     yield f"data: {json.dumps({'type': type, 'line': line.decode().strip()})}\n\n"
-        
+
         async for item in stream_output(process.stdout, "stdout"):
             yield item
-        
+
         async for item in stream_output(process.stderr, "stderr"):
             yield item
 
@@ -357,10 +369,12 @@ async def stream_evaluation_events():
 
 
 @app.get("/run_evaluation_stream")
-async def run_evaluation_stream_endpoint():
+async def run_evaluation_stream_endpoint(
+    use_planner: bool = True, use_tools: bool = True, use_reasoning: bool = True
+):
     """Streaming endpoint for running the evaluation script."""
     return StreamingResponse(
-        stream_evaluation_events(),
+        stream_evaluation_events(use_planner, use_tools, use_reasoning),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

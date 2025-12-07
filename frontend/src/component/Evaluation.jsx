@@ -101,6 +101,9 @@ export const Evaluation = () => {
   const [error, setError] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [usePlanner, setUsePlanner] = useState(true);
+  const [useTools, setUseTools] = useState(true);
+  const [useReasoning, setUseReasoning] = useState(true);
   const logContainerRef = useRef(null);
 
   const fetchEvaluationResults = async () => {
@@ -110,7 +113,7 @@ export const Evaluation = () => {
       if (!res.ok) {
         if (res.status === 404) {
           setResults([]);
-          setError(null); 
+          setError(null);
         } else {
           throw new Error(`Failed to fetch: ${res.statusText}`);
         }
@@ -140,8 +143,14 @@ export const Evaluation = () => {
     setLogs([]);
     setError(null);
 
+    const params = new URLSearchParams({
+      use_planner: usePlanner,
+      use_tools: useTools,
+      use_reasoning: useReasoning,
+    });
+
     const eventSource = new EventSource(
-      "http://127.0.0.1:8000/run_evaluation_stream"
+      `http://127.0.0.1:8000/run_evaluation_stream?${params.toString()}`
     );
 
     eventSource.onmessage = (event) => {
@@ -185,23 +194,37 @@ export const Evaluation = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleRunEvaluation}
-          disabled={isRunning}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-all"
-        >
-          {isRunning ? (
-            <>
-              <Loader className="w-4 h-4 animate-spin" />
-              Running...
-            </>
-          ) : (
-            <>
-              <Play className="w-4 h-4" />
-              Run Evaluation
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center">
+            <input type="checkbox" id="usePlanner" checked={usePlanner} onChange={() => setUsePlanner(!usePlanner)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+            <label htmlFor="usePlanner" className="ml-2 block text-sm text-gray-900">Planner</label>
+          </div>
+          <div className="flex items-center">
+            <input type="checkbox" id="useTools" checked={useTools} onChange={() => setUseTools(!useTools)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+            <label htmlFor="useTools" className="ml-2 block text-sm text-gray-900">Tools</label>
+          </div>
+          <div className="flex items-center">
+            <input type="checkbox" id="useReasoning" checked={useReasoning} onChange={() => setUseReasoning(!useReasoning)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
+            <label htmlFor="useReasoning" className="ml-2 block text-sm text-gray-900">Reasoning</label>
+          </div>
+          <button
+            onClick={handleRunEvaluation}
+            disabled={isRunning}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-all"
+          >
+            {isRunning ? (
+              <>
+                <Loader className="w-4 h-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" />
+                Run Evaluation
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {isRunning || logs.length > 0 ? (
