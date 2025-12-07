@@ -5,10 +5,10 @@ import { Header } from './component/Header'
 import { ProcessingSteps } from './component/chat/ProcessingSteps'
 import { Message } from './component/chat/Message'
 import { Evaluation } from "./component/Evaluation";
-
+import { DevMode } from "./component/DevMode";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Plane } from "lucide-react";
+import { Plane, Code2 } from "lucide-react";
 
 const INITIAL_AGENT_STATE = {
   plan: null,
@@ -35,7 +35,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState(`session_${Date.now()}`);
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState("planner");
-
+  const [showDevMode, setShowDevMode] = useState(false);
 
   const [currentStreamingMessage, setCurrentStreamingMessage] = useState("");
   const [awaitingUserInput, setAwaitingUserInput] = useState(false);
@@ -158,6 +158,24 @@ export default function App() {
     setCurrentStreamingMessage("");
   };
 
+  const handleStateRestored = (restoredState) => {
+    // Update agent state with restored data
+    setAgentState((prev) => ({ ...prev, ...restoredState }));
+    
+    // Show success message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: "✅ Checkpoint restored successfully! The conversation state has been loaded.",
+        isSystem: true,
+      },
+    ]);
+    
+    // Close dev mode
+    setShowDevMode(false);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -174,9 +192,9 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
-            with_reasoning: withReasoning, // sends default false
-            with_planner: withPlanner,     // sends default false
-            with_tools: withTools          // sends default true
+            with_reasoning: withReasoning,
+            with_planner: withPlanner,
+            with_tools: withTools
           }),
         });
         console.log("Initial configuration synced");
@@ -186,8 +204,20 @@ export default function App() {
     };
 
     syncInitialConfiguration();
-    // We run this when sessionId changes to ensure new sessions get configured
   }, [sessionId]);
+
+  // Keyboard shortcut for dev mode (Ctrl/Cmd + K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowDevMode((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   
   const handleSubmit = async () => {
     if (!input.trim() || isLoading) return;
@@ -354,6 +384,17 @@ export default function App() {
         setActiveTab={setActiveTab}
       />
 
+      {/* Dev Mode Button */}
+      <button
+        onClick={() => setShowDevMode(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 group"
+        title="Open Checkpoint Manager (Ctrl/Cmd + K)"
+      >
+        <Code2 className="w-5 h-5" />
+        <span className="font-medium">Dev Mode</span>
+        <span className="text-xs opacity-60 ml-1 hidden group-hover:inline">⌘K</span>
+      </button>
+
       <div className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === "planner" ? (
           <div
@@ -448,7 +489,15 @@ export default function App() {
           <Evaluation />
         )}
       </div>
+
+      {/* Dev Mode Modal */}
+      {showDevMode && (
+        <DevMode
+          sessionId={sessionId}
+          onStateRestored={handleStateRestored}
+          onClose={() => setShowDevMode(false)}
+        />
+      )}
     </div>
   );
 }
-

@@ -67,7 +67,7 @@ export const TripDetailsSidebar = ({
       {plan && (
         <>
           <div className="print-avoid-break">
-            <DestinationBlock plan={plan} cityCode={agentState.city_code} />
+            <DestinationBlock plan={plan} cityCode={agentState.city_code} destinationName={agentState.destination_name} />
           </div>
           <div className="print-avoid-break">
             <DatesBlock plan={plan} />

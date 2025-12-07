@@ -5,7 +5,6 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
-import json
 
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
 from src.tools import FlightSearchTool, AmadeusAuth
