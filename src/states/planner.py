@@ -10,6 +10,7 @@ class PlanDetailsState(BaseModel):
     departure_date: Optional[str] = Field(description="Departure date")
     arrival_date: Optional[str] = Field(description="Arrival date")
     budget: Optional[float] = Field(description="Total budget for the trip")
+    budget_currency: Optional[str] = Field(description="Currency of the budget, e.g., 'USD', 'EUR'", default="USD")
     remaining_budget: Optional[float] = Field(
         description="Remaining budget for the trip"
     )

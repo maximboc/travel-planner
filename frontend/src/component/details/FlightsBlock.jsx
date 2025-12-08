@@ -1,23 +1,14 @@
 import React, { useState } from 'react';
 import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight, MapPin } from 'lucide-react';
+import { useCurrency } from "../../context/CurrencyContext";
+import { formatPrice } from "../../utils/formatPrice";
 
-export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false }) => {
+export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false, selectedCurrency, usdToEurRate, eurToUsdRate }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
   const flights = flightData || [];
   
   // Determine visibility: User toggled OR forced open by print
   const shouldShow = isExpanded || defaultOpen;
-
-  const formatPrice = (price, currency = 'USD') => {
-    try {
-      return new Intl.NumberFormat('en-US', { 
-        style: 'currency', 
-        currency: currency 
-      }).format(parseFloat(price));
-    } catch {
-      return `${currency} ${price}`;
-    }
-  };
 
   const formatDateTime = (isoString) => {
     if (!isoString) return 'N/A';
@@ -132,7 +123,7 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false })
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold text-cyan-700">
-                      {formatPrice(flight.price, flight.currency)}
+                      {formatPrice(flight.price, selectedCurrency, flight.currency, usdToEurRate, eurToUsdRate)}
                     </p>
                     <p className="text-[10px] text-gray-500">total</p>
                   </div>

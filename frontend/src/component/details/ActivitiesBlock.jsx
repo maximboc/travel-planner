@@ -4,8 +4,10 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useCurrency } from "../../context/CurrencyContext";
+import { formatPrice } from "../../utils/formatPrice";
 
-export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
+export const ActivitiesBlock = ({ activityData, defaultOpen = false, selectedCurrency, usdToEurRate, eurToUsdRate }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
   
   // Determine visibility
@@ -42,9 +44,9 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
                 <h4 className="font-bold text-gray-800 text-sm leading-tight">
                   {a.name}
                 </h4>
-                {a.price && (
+                {a.amount && (
                   <span className="shrink-0 text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-1 rounded-md">
-                    {a.price}
+                    {formatPrice(a.amount, selectedCurrency, a.currency, usdToEurRate, eurToUsdRate)}
                   </span>
                 )}
               </div>

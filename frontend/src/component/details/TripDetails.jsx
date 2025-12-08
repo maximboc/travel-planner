@@ -9,6 +9,8 @@ import { EditForm } from './EditForm'
 import { PassengersBlock } from './PassengerBlock'
 import { FlightsBlock } from './FlightsBlock'
 import { DestinationBlock } from './DestinationBlock'
+import { CurrencySelector } from "../common/CurrencySelector"; // Import CurrencySelector
+import { useCurrency } from "../../context/CurrencyContext"; // Import useCurrency
 
 export const TripDetailsSidebar = ({
   agentState,
@@ -24,6 +26,7 @@ export const TripDetailsSidebar = ({
 
   // Ref specifically for the hidden print container
   const contentRef = useRef(null);
+  const { selectedCurrency, setCurrency, usdToEurRate, eurToUsdRate } = useCurrency(); // Use the currency context
 
   const handlePrint = useReactToPrint({
     contentRef,
@@ -73,7 +76,7 @@ export const TripDetailsSidebar = ({
             <DatesBlock plan={plan} />
           </div>
           <div className="print-avoid-break">
-            <BudgetBlock plan={plan} />
+            <BudgetBlock plan={plan} selectedCurrency={selectedCurrency} usdToEurRate={usdToEurRate} eurToUsdRate={eurToUsdRate} />
           </div>
         </>
       )}
@@ -92,6 +95,9 @@ export const TripDetailsSidebar = ({
             flightData={agentState.flight_data}
             selectedIndex={agentState.selected_flight_index}
             defaultOpen={isPrinting} // <--- FORCE OPEN IF PRINTING
+            selectedCurrency={selectedCurrency}
+            usdToEurRate={usdToEurRate}
+            eurToUsdRate={eurToUsdRate}
           />
         </div>
       )}
@@ -101,11 +107,13 @@ export const TripDetailsSidebar = ({
         agentState.hotel_data.hotels.length > 0 && (
           <div className="print-avoid-break">
             <HotelsBlock
-              hotelData={agentState.hotel_data}
-              selectedIndex={agentState.selected_hotel_index}
-              defaultOpen={isPrinting} // <--- FORCE OPEN IF PRINTING
-            />
-          </div>
+                                      hotelData={agentState.hotel_data}
+                                      selectedIndex={agentState.selected_hotel_index}
+                                      defaultOpen={isPrinting} // <--- FORCE OPEN IF PRINTING
+                                      selectedCurrency={selectedCurrency}
+                                      usdToEurRate={usdToEurRate}
+                                      eurToUsdRate={eurToUsdRate}
+                                    />          </div>
         )}
 
       {agentState.activity_data &&
@@ -114,6 +122,9 @@ export const TripDetailsSidebar = ({
             <ActivitiesBlock 
               activityData={agentState.activity_data} 
               defaultOpen={isPrinting} // <--- FORCE OPEN IF PRINTING
+              selectedCurrency={selectedCurrency}
+              usdToEurRate={usdToEurRate}
+              eurToUsdRate={eurToUsdRate}
             />
           </div>
         )}
@@ -137,6 +148,10 @@ export const TripDetailsSidebar = ({
         </h2>
         
         <div className="flex gap-2">
+          {plan && !isEditing && (
+            <CurrencySelector />
+          )}
+
           {plan && !isEditing && (
             <button
               onClick={handlePrint}
