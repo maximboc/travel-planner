@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Hotel, ChevronDown, ChevronUp, Phone, Calendar, Users, Bed, MapPin } from 'lucide-react';
 import { useCurrency } from "../../context/CurrencyContext";
 import { formatPrice } from "../../utils/formatPrice";
 
-export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false, selectedCurrency, usdToEurRate, eurToUsdRate }) => {
+export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
+  const { selectedCurrency, rates, ensureRates } = useCurrency();
   const hotels = hotelData?.hotels || [];
+
+  // When hotel data or the selected currency changes, ensure we have the required exchange rates
+  useEffect(() => {
+    if (hotels.length > 0) {
+      const sourceCurrencies = hotels.flatMap(hotel =>
+        hotel.offers?.map(offer => offer.price.currency) || []
+      );
+      ensureRates(sourceCurrencies, selectedCurrency);
+    }
+  }, [hotels, selectedCurrency, ensureRates]);
 
   // Determine visibility
   const shouldShow = isExpanded || defaultOpen;
@@ -77,7 +88,7 @@ export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false, sel
                                   {firstOffer?.price && (
                                     <div className="text-right shrink-0">
                                       <p className="font-bold text-emerald-700">
-                                        {formatPrice(firstOffer.price.total, selectedCurrency, firstOffer.price.currency, usdToEurRate, eurToUsdRate)}
+                                        {formatPrice(firstOffer.price.total, selectedCurrency, firstOffer.price.currency, rates)}
                                       </p>
                                       <p className="text-[10px] text-gray-500">total</p>
                                     </div>
@@ -166,18 +177,18 @@ export const HotelsBlock = ({ hotelData, selectedIndex, defaultOpen = false, sel
                               )}
                               {offer.price.avg_nightly && (
                                 <p className="text-xs text-gray-600">
-                                  {formatPrice(offer.price.avg_nightly, selectedCurrency, offer.price.currency, usdToEurRate, eurToUsdRate)}/night
+                                  {formatPrice(offer.price.avg_nightly, selectedCurrency, offer.price.currency, rates)}/night
                                 </p>
                               )}
                               {offer.price.taxes && (
                                 <p className="text-[10px] text-gray-500">
-                                  + {formatPrice(offer.price.taxes, selectedCurrency, offer.price.currency, usdToEurRate, eurToUsdRate)} taxes
+                                  + {formatPrice(offer.price.taxes, selectedCurrency, offer.price.currency, rates)} taxes
                                 </p>
                               )}
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-bold text-emerald-700">
-                                {formatPrice(offer.price.total, selectedCurrency, offer.price.currency, usdToEurRate, eurToUsdRate)}
+                                {formatPrice(offer.price.total, selectedCurrency, offer.price.currency, rates)}
                               </p>
                             </div>
                           </div>

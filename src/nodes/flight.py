@@ -63,6 +63,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
     try:
         if state.with_tools:
             flight_search_tool = FlightSearchTool(amadeus_auth)
+            print(f"   ℹ️ Flight search plan: {plan}")
             flight_results: List[FlightSearchResultState] = flight_search_tool.invoke(
                 {
                     "origin": plan.origin,

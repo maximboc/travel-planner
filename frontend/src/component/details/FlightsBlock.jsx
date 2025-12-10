@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plane, ChevronDown, ChevronUp, Clock, ArrowRight, MapPin } from 'lucide-react';
 import { useCurrency } from "../../context/CurrencyContext";
 import { formatPrice } from "../../utils/formatPrice";
 
-export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false, selectedCurrency, usdToEurRate, eurToUsdRate }) => {
+export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
+  const { selectedCurrency, rates, ensureRates } = useCurrency();
   const flights = flightData || [];
+
+  // When flight data or the selected currency changes, ensure we have the required exchange rates
+  useEffect(() => {
+    if (flights.length > 0) {
+      const sourceCurrencies = flights.map(flight => flight.currency);
+      ensureRates(sourceCurrencies, selectedCurrency);
+    }
+  }, [flights, selectedCurrency, ensureRates]);
   
   // Determine visibility: User toggled OR forced open by print
   const shouldShow = isExpanded || defaultOpen;
@@ -123,7 +132,7 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false, s
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-bold text-cyan-700">
-                      {formatPrice(flight.price, selectedCurrency, flight.currency, usdToEurRate, eurToUsdRate)}
+                      {formatPrice(flight.price, selectedCurrency, flight.currency, rates)}
                     </p>
                     <p className="text-[10px] text-gray-500">total</p>
                   </div>
@@ -292,7 +301,7 @@ export const FlightsBlock = ({ flightData, selectedIndex, defaultOpen = false, s
                                   <span className={segment.stops === 0 ? 'text-green-600 font-medium' : ''}>
                                     {getStopsText(segment.stops)}
                                   </span>
-                                d</div>
+                                </div>
                               )}
                             </div>
                           </div>

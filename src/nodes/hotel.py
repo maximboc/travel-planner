@@ -210,9 +210,13 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
 
     if selected_index is not None:
         state.selected_hotel_index = selected_index
-        print(
-            f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
-        )
+        if state.hotel_data and state.hotel_data.hotels and 0 <= selected_index < len(state.hotel_data.hotels):
+            print(
+                f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
+            )
+        else:
+            print(f"   ⚠️ Selected index {selected_index} is out of range for available hotels.")
+            state.selected_hotel_index = None
     else:
         state.selected_hotel_index = None
         print("   ⚠️ No valid hotel selection made.")
