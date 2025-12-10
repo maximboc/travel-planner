@@ -46,6 +46,11 @@ LOGIC RULES
 - If the user says "tomorrow", interpret it relative to today ({today_str}).
 - If the user says "for a week", set arrival_date to departure_date + 7 days.
 - If the origin is not specified, leave it empty. It will be detected automatically.
+- **CURRENCY HANDLING**:
+    - If the user provides a budget with a currency symbol (e.g., '$', '€', '£'), assume the most common currency for that symbol ('USD', 'EUR', 'GBP').
+    - The `budget` field should be the numeric value.
+    - The `budget_currency` field MUST be the ISO code (e.g., "USD", "EUR").
+    - If no symbol is given, assume USD. For "1000 dollars", assume USD.
 - Confidence is "low" if any critical field is unclear or missing: destination, departure_date
 - Optional fields may be left empty or false: hotel, activities.
 - ALWAYS output valid JSON. No extra text.
@@ -68,7 +73,8 @@ YOUR RESPONSE (STRICT JSON)
   "origin": "City, Country",
   "departure_date": "YYYY-MM-DD",
   "arrival_date": "YYYY-MM-DD",
-  "budget": "integer in USD",
+  "budget": 10000,
+  "budget_currency": "USD",
   "interests": "string",
   "need_hotel": true/false,
   "need_activities": true/false,
@@ -144,6 +150,7 @@ Return ONLY the JSON object.
             departure_date=plan_data["departure_date"],
             arrival_date=plan_data["arrival_date"],
             budget=budget,
+            budget_currency=plan_data.get("budget_currency", "USD"),
             remaining_budget=budget,
             interests=plan_data.get("interests", ""),
             need_hotel=plan_data.get("need_hotel", False),
@@ -183,7 +190,7 @@ Return ONLY the JSON object.
     print(
         f"   📝 Plan: {plan.destination} ({plan.departure_date} to {plan.arrival_date})"
     )
-    print(f"   💰 Budget: ${plan.budget}")
+    print(f"   💰 Budget: {plan.budget} {plan.budget_currency}")
     print(f"   🏨 Hotel needed: {plan.need_hotel}")
     print(f"   🎯 Activities needed: {plan.need_activities}")
 

@@ -34,17 +34,31 @@ export const formatPrice = (price, targetCurrency, originalCurrency, rates) => {
   }
 
   try {
-    const formattedPrice = new Intl.NumberFormat('en-US', {
+    // Determine locale based on currency for accurate formatting
+    let locale;
+    switch (currencyToDisplay) {
+      case 'EUR':
+        locale = 'de-DE'; // Use German locale for Euro formatting (€1.234,56)
+        break;
+      case 'GBP':
+        locale = 'en-GB'; // Use British locale for Pound formatting (£1,234.56)
+        break;
+      default:
+        locale = 'en-US'; // Default to US locale
+    }
+
+    const formattedPrice = new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: currencyToDisplay,
-      minimumFractionDigits: 0,
+      minimumFractionDigits: 2, // Always show 2 decimal places for consistency
       maximumFractionDigits: 2,
     }).format(priceToFormat);
+    
     return formattedPrice + (displayOriginalAsSuffix || '');
   } catch (error) {
     // Fallback for invalid currency codes
     if (error instanceof RangeError) {
-      return `${originalCurrency} ${numericPrice.toFixed(0)}*`;
+      return `${originalCurrency} ${numericPrice.toFixed(2)}*`;
     }
     console.error("Error formatting price:", error);
     return `${targetCurrency} ${priceToFormat.toFixed(2)}`;

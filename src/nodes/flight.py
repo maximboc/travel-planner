@@ -7,7 +7,7 @@ from langsmith import traceable
 from langgraph.types import Command
 
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
-from src.tools import FlightSearchTool, AmadeusAuth
+from src.tools import FlightSearchTool, AmadeusAuth, GetExchangeRateTool
 
 
 def flight_skipped(state: AgentState) -> bool:
@@ -274,14 +274,36 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         selected_index = top_indices[0]
         flight_cost = float(flight_results[selected_index].price)
         print(f"   ✅ Selected Flight #{selected_index + 1} (fallback)")
-        print(f"   💰 Cost: ${flight_cost}")
 
     recommendation = result.get("recommendation", "")
-    print(f"   ✅ Selected Flight #{selected_index + 1}")
-    print(f"   💰 Cost: ${flight_cost}")
-    print(f"   💡 {recommendation}")
+    
+    # --- CURRENCY CONVERSION LOGIC ---
+    selected_flight = flight_results[selected_index]
+    flight_currency = selected_flight.currency
+    budget_currency = plan.budget_currency or "USD"
 
-    plan.remaining_budget = plan.remaining_budget - flight_cost
+    converted_flight_cost = flight_cost
+    if flight_currency != budget_currency:
+        print(f"   🔁 Converting flight cost from {flight_currency} to {budget_currency}...")
+        try:
+            exchange_rate_tool = GetExchangeRateTool()
+            rate_result = exchange_rate_tool.run(
+                from_currency=flight_currency,
+                to_currency=budget_currency
+            )
+            conversion_rate = rate_result['rate']
+            converted_flight_cost = flight_cost * conversion_rate
+            print(f"   ✅ Converted Cost: {converted_flight_cost:.2f} {budget_currency} (Rate: {conversion_rate})")
+        except Exception as e:
+            print(f"   ⚠️ Currency conversion failed: {e}. Using original cost.")
+            converted_flight_cost = flight_cost # Fallback to original cost
+
+    print(f"   ✅ Selected Flight #{selected_index + 1}")
+    print(f"   💰 Cost: {converted_flight_cost:.2f} {budget_currency}")
+    if recommendation:
+        print(f"   💡 {recommendation}")
+
+    plan.remaining_budget = plan.remaining_budget - converted_flight_cost
     state.plan = plan
     state.flight_data = flight_results
     state.selected_flight_index = selected_index

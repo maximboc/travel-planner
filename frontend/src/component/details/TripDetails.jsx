@@ -76,7 +76,15 @@ export const TripDetailsSidebar = ({
             <DatesBlock plan={plan} />
           </div>
           <div className="print-avoid-break">
-            <BudgetBlock plan={plan} selectedCurrency={selectedCurrency} usdToEurRate={usdToEurRate} eurToUsdRate={eurToUsdRate} />
+            <BudgetBlock
+              budget={plan.budget}
+              budgetCurrency={plan.budget_currency}
+              flights={agentState.flight_data}
+              selectedFlightIndex={agentState.selected_flight_index}
+              hotels={agentState.hotel_data?.hotels}
+              selectedHotelIndex={agentState.selected_hotel_index}
+              activities={agentState.activity_data}
+            />
           </div>
         </>
       )}
