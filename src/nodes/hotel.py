@@ -176,7 +176,7 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
         ----------------------------
         OUTPUT FORMAT (STRICT JSON)
         ----------------------------
-        Return a JSON object containing the index of the selected hotel from the list provided and the hotel details.
+        Return a JSON object containing the index of the selected hotel from the list provided and the hotel details. Ensure all numerical values are provided directly without mathematical expressions or comments.
 
         {{
         "selected_hotel_index": 0,
@@ -208,10 +208,17 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     selection_data = json.loads(content.strip())
     selected_index = selection_data.get("selected_hotel_index", None)
 
-    if selected_index is not None and state.hotel_data and state.hotel_data.hotels and 0 <= selected_index < len(state.hotel_data.hotels):
+    if (
+        selected_index is not None
+        and state.hotel_data
+        and state.hotel_data.hotels
+        and 0 <= selected_index < len(state.hotel_data.hotels)
+    ):
         state.selected_hotel_index = selected_index
         selected_hotel = state.hotel_data.hotels[selected_index]
-        print(f"   ✅ Selected best hotel (Index {selected_index}): {selected_hotel.name}")
+        print(
+            f"   ✅ Selected best hotel (Index {selected_index}): {selected_hotel.name}"
+        )
 
         # --- CURRENCY CONVERSION & BUDGET UPDATE ---
         if selected_hotel.offers:
@@ -222,19 +229,22 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
 
             converted_hotel_cost = hotel_cost
             if hotel_currency != budget_currency:
-                print(f"   🔁 Converting hotel cost from {hotel_currency} to {budget_currency}...")
+                print(
+                    f"   🔁 Converting hotel cost from {hotel_currency} to {budget_currency}..."
+                )
                 try:
                     exchange_rate_tool = GetExchangeRateTool()
                     rate_result = exchange_rate_tool.run(
-                        from_currency=hotel_currency,
-                        to_currency=budget_currency
+                        from_currency=hotel_currency, to_currency=budget_currency
                     )
-                    conversion_rate = rate_result['rate']
+                    conversion_rate = rate_result["rate"]
                     converted_hotel_cost = hotel_cost * conversion_rate
-                    print(f"   ✅ Converted Cost: {converted_hotel_cost:.2f} {budget_currency} (Rate: {conversion_rate})")
+                    print(
+                        f"   ✅ Converted Cost: {converted_hotel_cost:.2f} {budget_currency} (Rate: {conversion_rate})"
+                    )
                 except Exception as e:
                     print(f"   ⚠️ Currency conversion failed: {e}. Using original cost.")
-            
+
             print(f"   💰 Cost: {converted_hotel_cost:.2f} {budget_currency}")
             plan.remaining_budget -= converted_hotel_cost
             state.plan = plan
@@ -244,7 +254,6 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     else:
         state.selected_hotel_index = None
         print("   ⚠️ No valid hotel selection made or index out of range.")
-
 
     print("   ✅ Hotel analysis complete.")
 
