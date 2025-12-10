@@ -1,12 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react';
 import {
   Compass,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useCurrency } from "../../context/CurrencyContext";
+import { formatPrice } from "../../utils/formatPrice";
 
 export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
   const [isExpanded, setIsExpanded] = useState(defaultOpen);
+  const { selectedCurrency, rates, ensureRates } = useCurrency();
+
+  // When activity data or the selected currency changes, ensure we have the required exchange rates
+  useEffect(() => {
+    if (activityData && activityData.length > 0) {
+      const sourceCurrencies = activityData.map(a => a.currency);
+      ensureRates(sourceCurrencies, selectedCurrency);
+    }
+  }, [activityData, selectedCurrency, ensureRates]);
   
   // Determine visibility
   const shouldShow = isExpanded || defaultOpen;
@@ -20,7 +31,7 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
         <div className="flex items-center gap-2">
           <Compass className="w-5 h-5 text-yellow-600" />
           <span className="text-xs font-semibold text-yellow-900 uppercase">
-            Activities Found ({activityData.length})
+            Activities Found ({(activityData || []).length})
           </span>
         </div>
         {shouldShow ? (
@@ -32,7 +43,7 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
       
       {shouldShow && (
         <div className="px-4 pb-4 space-y-3">
-          {activityData.map((a, i) => {
+          {(activityData || []).map((a, i) => {
             return (
             <div
               key={i}
@@ -42,9 +53,9 @@ export const ActivitiesBlock = ({ activityData, defaultOpen = false }) => {
                 <h4 className="font-bold text-gray-800 text-sm leading-tight">
                   {a.name}
                 </h4>
-                {a.price && (
+                {a.amount && (
                   <span className="shrink-0 text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-1 rounded-md">
-                    {a.price}
+                    {formatPrice(a.amount, selectedCurrency, a.currency, rates)}
                   </span>
                 )}
               </div>

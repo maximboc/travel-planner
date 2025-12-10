@@ -95,6 +95,7 @@ def serialize_state_for_frontend(state: dict) -> dict:
             "departure_date": getattr(plan, "departure_date", None),
             "arrival_date": getattr(plan, "arrival_date", None),
             "budget": getattr(plan, "budget", None),
+            "budget_currency": getattr(plan, "budget_currency", "USD"),
             "need_hotel": getattr(plan, "need_hotel", False),
             "need_activities": getattr(plan, "need_activities", False),
         }
@@ -132,7 +133,8 @@ def serialize_state_for_frontend(state: dict) -> dict:
             {
                 "name": getattr(a, "name", None),
                 "description": getattr(a, "short_description", None),
-                "price": getattr(a, "price", None),
+                "amount": getattr(a, "amount", None),
+                "currency": getattr(a, "currency", "USD"),
                 "booking_link": getattr(a, "booking_link", None),
             }
             for a in state["activity_data"]
@@ -583,6 +585,20 @@ async def get_evaluation_results():
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from src.tools.exchange_rate import GetExchangeRateTool
+exchange_rate_tool = GetExchangeRateTool()
+
+@app.get("/exchange_rate")
+async def get_exchange_rate(from_currency: str, to_currency: str):
+    try:
+        rate_result = exchange_rate_tool._run(from_currency, to_currency)
+        return {"rate": rate_result["rate"], "from": rate_result["from_currency"], "to": rate_result["to_currency"]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch exchange rate")
 
 
 if __name__ == "__main__":
