@@ -174,109 +174,80 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
 
     flight_results_str = format_flights_for_llm_compact(flight_results)
 
-    filtering_prompt = f"""
-        Analyze these flights and filter to the top 3 viable options.
+    PROMPT = f"""
+        You are an expert travel assistant. Analyze the following flight options and select the single best one for the user.
 
-        Budget: ${plan.remaining_budget}
-        Flights:
+        USER PREFERENCES:
+        - Budget: Up to ${plan.remaining_budget}
+        - Travelers: {state.adults} Adults, {state.children} Children
+        - Avoid excessive layovers (>8 hours) or very inconvenient times (midnight-5am).
+
+        AVAILABLE FLIGHTS:
         {flight_results_str}
 
-        Eliminate flights that:
-        - Exceed budget
-        - Have excessive layovers (>8 hours)
-        - Arrive/depart at very inconvenient times (midnight-5am)
+        YOUR TASK:
+        1.  Filter out flights that do not meet the user's preferences.
+        2.  From the suitable options, select the single best flight that offers a good balance of price, convenience, and duration.
+        3.  Return a JSON object with the details of your selection.
 
-        Return the indices of the top 3 flights as JSON:
+        Return ONLY a valid JSON object with this exact structure (no markdown, no additional text):
         {{
-        "top_flights": [0, 2, 5],
-        "eliminated_count": 7,
-        "reasoning": "Brief explanation"
+            "selected_original_index": <integer>,
+            "price": <float>,
+            "recommendation": "Detailed 2-3 sentence recommendation explaining why this is the best choice."
         }}
     """
 
     try:
-        stage1_response = llm.invoke(filtering_prompt).content
-        stage1_response = (
-            stage1_response
-            if isinstance(stage1_response, str)
-            else str(stage1_response)
+        response_content = llm.invoke(PROMPT).content
+        response_content = (
+            response_content
+            if isinstance(response_content, str)
+            else str(response_content)
         )
 
         json_match = re.search(
-            r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", stage1_response, re.DOTALL
+            r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", response_content, re.DOTALL
         )
-        if json_match:
-            filtered = json.loads(json_match.group())
-            top_indices = filtered.get("top_flights", [0, 1, 2])[:3]
-        else:
-            top_indices = [0, 1, 2]
-    except Exception as e:
-        print(f"   ⚠️ Error filtering flights: {e}")
-        top_indices = [0, 1, 2]
+        if not json_match:
+            raise ValueError("No valid JSON object found in the LLM response.")
 
-    top_flights = [flight_results[i] for i in top_indices if i < len(flight_results)]
+        result = json.loads(json_match.group())
+        selected_index = int(result["selected_original_index"])
+        flight_cost = float(result["price"])
+        recommendation = result.get("recommendation", "")
 
-    if not top_flights:
-        question = f"All available flights exceed your budget of ${plan.remaining_budget}. Would you like to:\n1. Increase your budget\n2. Try different travel dates\n3. Skip flight booking for now"
+        # Validate selection
+        if selected_index >= len(flight_results):
+            raise ValueError(f"Selected index {selected_index} is out of bounds.")
+        if flight_cost > plan.remaining_budget:
+            print(
+                f"   ⚠️ Selected flight at ${flight_cost} exceeds budget of ${plan.remaining_budget}. Using fallback."
+            )
+            raise ValueError("Selected flight exceeds budget.")
 
-        state.needs_user_input = True
-        state.validation_question = question
-        state.messages.append(AIMessage(content=question))
-        state.last_node = "flight_agent"
-        return Command(goto="compiler", update=state)
+    except (ValueError, KeyError, json.JSONDecodeError, Exception) as e:
+        print(f"   ⚠️ Error processing LLM selection: {e}. Applying fallback logic.")
+        # Fallback: select the cheapest valid option
+        valid_flights = [
+            (i, f)
+            for i, f in enumerate(flight_results)
+            if f.price and float(f.price) <= plan.remaining_budget
+        ]
+        if not valid_flights:
+            question = f"All available flights exceed your budget of ${plan.remaining_budget}. Would you like to increase your budget or try different dates?"
+            state.needs_user_input = True
+            state.validation_question = question
+            state.messages.append(AIMessage(content=question))
+            state.last_node = "flight_agent"
+            return Command(goto="compiler", update=state)
 
-    top_flights_str = format_flights_for_llm_compact(top_flights)
-
-    PROMPT = f"""You have available hotel options. Select the BEST one. Provide a reasoned choice, no code.
-        ------------------------
-        TOP FLIGHT OPTIONS
-        ------------------------
-        Flights:
-        {top_flights_str}
-
-        -----------------------
-        YOUR TASK
-        -----------------------
-
-        Consider the full stay experience:
-        - Is the price reasonable for what you get?
-        - Is the location convenient?
-        - Do the amenities match the traveler's needs?
-        - Is it suitable for {state.adults} adults and {state.children} children?
-
-        Return JSON:
-        {{
-        "selected_original_index": 0,
-        "price": 0.0,
-        "recommendation": "Detailed 2-3 sentence recommendation explaining why this is the best choice for the traveler"
-        }}
-    """
-
-    try:
-        stage2_response = llm.invoke(PROMPT).content
-        stage2_response = (
-            stage2_response
-            if isinstance(stage2_response, str)
-            else str(stage2_response)
-        )
-
-        json_match = re.search(
-            r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", stage2_response, re.DOTALL
-        )
-        if json_match:
-            result = json.loads(json_match.group())
-            selected_index = result.get("selected_original_index", top_indices[0])
-            flight_cost = float(result.get("price", 0.0))
-        else:
-            raise ValueError("No JSON found")
-    except Exception as e:
-        print(f"   ⚠️ Error selecting flight: {e}")
-        selected_index = top_indices[0]
-        flight_cost = float(flight_results[selected_index].price)
+        valid_flights.sort(key=lambda x: float(x[1].price))
+        selected_index = valid_flights[0][0]
+        flight_cost = float(valid_flights[0][1].price)
+        recommendation = "Selected the most affordable flight within your budget as a fallback."
         print(f"   ✅ Selected Flight #{selected_index + 1} (fallback)")
 
-    recommendation = result.get("recommendation", "")
-    
     # --- CURRENCY CONVERSION LOGIC ---
     selected_flight = flight_results[selected_index]
     flight_currency = selected_flight.currency
@@ -288,8 +259,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         try:
             exchange_rate_tool = GetExchangeRateTool()
             rate_result = exchange_rate_tool.run(
-                from_currency=flight_currency,
-                to_currency=budget_currency
+                {'from_currency': flight_currency, 'to_currency': budget_currency}
             )
             conversion_rate = rate_result['rate']
             converted_flight_cost = flight_cost * conversion_rate
@@ -297,16 +267,25 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
         except Exception as e:
             print(f"   ⚠️ Currency conversion failed: {e}. Using original cost.")
             converted_flight_cost = flight_cost # Fallback to original cost
-
+    
     print(f"   ✅ Selected Flight #{selected_index + 1}")
     print(f"   💰 Cost: {converted_flight_cost:.2f} {budget_currency}")
     if recommendation:
         print(f"   💡 {recommendation}")
 
+    # For UI purposes, we'll show the selected flight + 2 other random ones
+    other_flights = [f for i, f in enumerate(flight_results) if i != selected_index]
+    
+    import random
+    
+    random.shuffle(other_flights)
+    
+    final_flights = [selected_flight] + other_flights[:2]
+
     plan.remaining_budget = plan.remaining_budget - converted_flight_cost
     state.plan = plan
-    state.flight_data = flight_results
-    state.selected_flight_index = selected_index
+    state.flight_data = final_flights
+    state.selected_flight_index = 0  # Best flight is always first
     state.needs_user_input = False
     state.validation_question = None
     state.last_node = None

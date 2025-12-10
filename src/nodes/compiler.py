@@ -1,22 +1,8 @@
 from langchain_ollama import ChatOllama
 from langsmith import traceable
 from src.states import AgentState
-from src.tools.exchange_rate import GetExchangeRateTool
-
-
-def _convert_currency(
-    amount: float, from_currency: str, to_currency: str, exchange_rate_tool: GetExchangeRateTool
-) -> float:
-    if from_currency == to_currency:
-        return amount
-    try:
-        exchange_rate_result = exchange_rate_tool._run(
-            from_currency=from_currency, to_currency=to_currency
-        )
-        return amount * exchange_rate_result["rate"]
-    except Exception as e:
-        print(f"   ⚠️ Currency conversion failed: {e}")
-        return amount
+from src.tools.exchange_rate import get_exchange_rates
+from typing import Set, Tuple
 
 
 @traceable
@@ -36,40 +22,55 @@ def compiler_node(state: AgentState, llm: ChatOllama):
         print("   ❓ Awaiting user input, cannot compile itinerary.")
         return state
 
-    # --- DETAILED BUDGET CALCULATION ---
+    # --- BATCH CURRENCY CONVERSION ---
     initial_budget = state.plan.budget or 0
     budget_currency = state.plan.budget_currency or "USD"
-    exchange_rate_tool = GetExchangeRateTool()
+    conversion_requests: Set[Tuple[str, str]] = set()
 
-    total_spent = 0.0
-
-    # Flight cost (calculated for budget summary)
+    # Gather all conversion requests
     if state.flight_data and state.selected_flight_index is not None:
         flight = state.flight_data[state.selected_flight_index]
-        flight_cost_in_budget_currency = _convert_currency(
-            float(flight.price), flight.currency, budget_currency, exchange_rate_tool
-        )
-        total_spent += flight_cost_in_budget_currency
+        if flight.currency != budget_currency:
+            conversion_requests.add((flight.currency, budget_currency))
 
-    # Hotel cost (calculated for budget summary)
+    if state.hotel_data and state.selected_hotel_index is not None:
+        hotel = state.hotel_data.hotels[state.selected_hotel_index]
+        if hotel.offers and hotel.offers[0].price.currency != budget_currency:
+            conversion_requests.add((hotel.offers[0].price.currency, budget_currency))
+    
+    if state.activity_data:
+        for activity in state.activity_data:
+            if activity.currency != budget_currency:
+                conversion_requests.add((activity.currency, budget_currency))
+
+    # Fetch all rates in one go
+    exchange_rates = get_exchange_rates(conversion_requests)
+
+    # --- DETAILED BUDGET CALCULATION ---
+    total_spent = 0.0
+
+    def convert(amount: float, from_curr: str, to_curr: str) -> float:
+        if from_curr == to_curr:
+            return amount
+        rate = exchange_rates.get((from_curr, to_curr), 1.0)
+        return amount * rate
+
+    if state.flight_data and state.selected_flight_index is not None:
+        flight = state.flight_data[state.selected_flight_index]
+        total_spent += convert(float(flight.price), flight.currency, budget_currency)
+
     if state.hotel_data and state.selected_hotel_index is not None:
         hotel = state.hotel_data.hotels[state.selected_hotel_index]
         if hotel.offers:
             offer = hotel.offers[0]
-            hotel_cost_in_budget_currency = _convert_currency(
-                float(offer.price.total), offer.price.currency, budget_currency, exchange_rate_tool
-            )
-            total_spent += hotel_cost_in_budget_currency
+            total_spent += convert(float(offer.price.total), offer.price.currency, budget_currency)
 
-    # Activity cost (calculated for budget summary)
     if state.activity_data:
         for activity in state.activity_data:
-            activity_cost_in_budget_currency = _convert_currency(
-                activity.amount, activity.currency, budget_currency, exchange_rate_tool
-            )
-            total_spent += activity_cost_in_budget_currency
+            total_spent += convert(activity.amount, activity.currency, budget_currency)
             
     remaining_budget = initial_budget - total_spent
+    state.plan.remaining_budget = remaining_budget
     
     budget_summary = f"""
     Budget Summary:
@@ -78,54 +79,29 @@ def compiler_node(state: AgentState, llm: ChatOllama):
     - Remaining Budget: {remaining_budget:.2f} {budget_currency}
     """
     
-    state.plan.remaining_budget = remaining_budget
-
     # --- CONTEXT CONSTRUCTION ---
-    # Flight Context
     flight_context = ""
     if state.flight_data and state.selected_flight_index is not None:
         flight = state.flight_data[state.selected_flight_index]
-        converted_flight_price = _convert_currency(
-            float(flight.price), flight.currency, budget_currency, exchange_rate_tool
-        )
+        converted_price = convert(float(flight.price), flight.currency, budget_currency)
         flight_context = (
             f"Selected Flight: {flight.itineraries[0].segments[0].departure_airport} to "
             f"{flight.itineraries[0].segments[0].arrival_airport} "
-            f"Price: {converted_flight_price:.2f} {budget_currency}"
+            f"Price: {converted_price:.2f} {budget_currency}"
         )
 
-    # Hotel Context
     hotel_context = ""
-    if (
-        state.plan.need_hotel
-        and state.hotel_data
-        and state.hotel_data.hotels
-        and state.selected_hotel_index is not None
-        and state.selected_hotel_index < len(state.hotel_data.hotels)
-    ):
+    if state.hotel_data and state.selected_hotel_index is not None:
         hotel = state.hotel_data.hotels[state.selected_hotel_index]
         if hotel.offers:
             offer = hotel.offers[0]
-            converted_hotel_price = _convert_currency(
-                float(offer.price.total), offer.price.currency, budget_currency, exchange_rate_tool
-            )
-            hotel_context = (
-                f"Selected Hotel: {hotel.name} "
-                f"Price: {converted_hotel_price:.2f} {budget_currency}"
-            )
+            converted_price = convert(float(offer.price.total), offer.price.currency, budget_currency)
+            hotel_context = f"Selected Hotel: {hotel.name} Price: {converted_price:.2f} {budget_currency}"
 
-    # Activity Context
     activity_context = ""
-    if state.plan.need_activities and state.activity_data:
-        activity_list_formatted = []
-        for activity in state.activity_data:
-            converted_activity_price = _convert_currency(
-                activity.amount, activity.currency, budget_currency, exchange_rate_tool
-            )
-            activity_list_formatted.append(
-                f"- Name: {activity.name}, Price: {converted_activity_price:.2f} {budget_currency}"
-            )
-        activity_context = "Found Activities:\n" + "\n".join(activity_list_formatted)
+    if state.activity_data:
+        activity_list = [f"- {act.name}: {convert(act.amount, act.currency, budget_currency):.2f} {budget_currency}" for act in state.activity_data]
+        activity_context = "Found Activities:\n" + "\n".join(activity_list)
 
     context = f"""
     Destination: {state.plan.destination}
@@ -147,14 +123,14 @@ def compiler_node(state: AgentState, llm: ChatOllama):
     OUTPUT GUIDELINES:
     • **Clarity is Key**: Use clean sections, bullet points, and short paragraphs.
     • **Structure**: Provide a "Full Itinerary Overview" section followed by a "Day-by-Day Breakdown".
-    • **Budget Section**: Use the "Budget Summary" provided in the data. DO NOT recalculate the total. Create a clear "Estimated Costs" section. For each item (flights, hotels, activities), list its name and its price, ENSURING ALL PRICES ARE PRESENTED IN THE SPECIFIED BUDGET CURRENCY. Then, present the "Total Estimated Cost" and "Remaining Budget" from the Budget Summary.
-    • **Data Integrity**: Base all information STRICTLY on the data provided. Do not invent details or prices. If data is missing (e.g., no hotels found), politely inform the user.
+    • **Budget Section**: Use the "Budget Summary" provided. Create a clear "Estimated Costs" section, listing each item's name and price in the correct currency. Present the "Total Estimated Cost" and "Remaining Budget".
+    • **Data Integrity**: Base all information STRICTLY on the data provided. Do not invent details.
     • **Tone**: Friendly, concise, expert, and professional.
     """
 
     prompt = f"{system_instruction}\n\nDATA:\n{context}\n\nWrite the itinerary:"
+    
     response = llm.invoke(prompt)
-
     state.final_itinerary = response.content
-
+    
     return state
