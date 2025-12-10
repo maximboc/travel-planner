@@ -1,7 +1,7 @@
 from typing import List
 from langsmith import traceable
 
-from src.tools import AmadeusAuth, ActivitySearchTool
+from src.tools import AmadeusAuth, ActivitySearchTool, GetExchangeRateTool
 from src.states import AgentState, ActivityResultState, PlanDetailsState
 
 
@@ -18,9 +18,9 @@ def activity_node(state: AgentState, amadeus_auth: AmadeusAuth):
         state.activity_data = None
         return state
 
-    if not state.latitude or not state.longitude:
+    if not state.city_code:
         print(
-            "   ⚠️ Could not find coordinates for the destination, skipping activity search."
+            "   ⚠️ Could not find city for the destination, skipping activity search."
         )
         state.activity_data = None
         return state
@@ -33,10 +33,40 @@ def activity_node(state: AgentState, amadeus_auth: AmadeusAuth):
 
     if not result:
         print("   ⚠️ No activities found.")
-        state.last_node = "activity_agent"
+        state.activity_data = []
     else:
-        print("   ✅ Activities found.")
+        print(f"   ✅ Found {len(result)} activities.")
         state.activity_data = result
+
+        # --- CURRENCY CONVERSION & BUDGET UPDATE ---
+        total_activity_cost = 0
+        budget_currency = plan.budget_currency or "USD"
+        exchange_rate_tool = GetExchangeRateTool()
+
+        for activity in result:
+            activity_cost = float(activity.amount)
+            activity_currency = activity.currency
+
+            converted_cost = activity_cost
+            if activity_currency != budget_currency:
+                print(f"   🔁 Converting activity cost from {activity_currency} to {budget_currency}...")
+                try:
+                    rate_result = exchange_rate_tool.run(
+                        from_currency=activity_currency,
+                        to_currency=budget_currency
+                    )
+                    conversion_rate = rate_result['rate']
+                    converted_cost = activity_cost * conversion_rate
+                    print(f"   ✅ Converted Cost: {converted_cost:.2f} {budget_currency} (Rate: {conversion_rate})")
+                except Exception as e:
+                    print(f"   ⚠️ Currency conversion failed for activity '{activity.name}': {e}. Using original cost.")
+            
+            total_activity_cost += converted_cost
+
+        print(f"   💰 Total Activity Cost: {total_activity_cost:.2f} {budget_currency}")
+        plan.remaining_budget -= total_activity_cost
+        state.plan = plan
+
 
     state.last_node = None
     state.needs_user_input = False

@@ -10,6 +10,8 @@ import { DevMode } from "./component/DevMode";
 import React, { useState, useRef, useEffect } from "react";
 import { Plane, Code2 } from "lucide-react";
 
+import { CurrencyProvider } from "./context/CurrencyContext";
+
 const INITIAL_AGENT_STATE = {
   plan: null,
   adults: null,
@@ -375,7 +377,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+    <CurrencyProvider>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
       <Header
         awaitingUserInput={awaitingUserInput}
         showDetails={showDetails}
@@ -499,5 +502,6 @@ export default function App() {
         />
       )}
     </div>
+    </CurrencyProvider>
   );
 }

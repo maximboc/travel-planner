@@ -7,7 +7,7 @@ from langchain_ollama import ChatOllama
 from langgraph.types import Command
 
 from src.states import HotelDetails, HotelSearchState
-from src.tools import HotelSearchTool, AmadeusAuth
+from src.tools import HotelSearchTool, AmadeusAuth, GetExchangeRateTool
 from src.states import AgentState, PlanDetailsState
 
 
@@ -208,14 +208,43 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
     selection_data = json.loads(content.strip())
     selected_index = selection_data.get("selected_hotel_index", None)
 
-    if selected_index is not None:
+    if selected_index is not None and state.hotel_data and state.hotel_data.hotels and 0 <= selected_index < len(state.hotel_data.hotels):
         state.selected_hotel_index = selected_index
-        print(
-            f"   ✅ Selected best hotel (Index {selected_index}): {state.hotel_data.hotels[selected_index]}"
-        )
+        selected_hotel = state.hotel_data.hotels[selected_index]
+        print(f"   ✅ Selected best hotel (Index {selected_index}): {selected_hotel.name}")
+
+        # --- CURRENCY CONVERSION & BUDGET UPDATE ---
+        if selected_hotel.offers:
+            offer = selected_hotel.offers[0]
+            hotel_cost = float(offer.price.total)
+            hotel_currency = offer.price.currency
+            budget_currency = plan.budget_currency or "USD"
+
+            converted_hotel_cost = hotel_cost
+            if hotel_currency != budget_currency:
+                print(f"   🔁 Converting hotel cost from {hotel_currency} to {budget_currency}...")
+                try:
+                    exchange_rate_tool = GetExchangeRateTool()
+                    rate_result = exchange_rate_tool.run(
+                        from_currency=hotel_currency,
+                        to_currency=budget_currency
+                    )
+                    conversion_rate = rate_result['rate']
+                    converted_hotel_cost = hotel_cost * conversion_rate
+                    print(f"   ✅ Converted Cost: {converted_hotel_cost:.2f} {budget_currency} (Rate: {conversion_rate})")
+                except Exception as e:
+                    print(f"   ⚠️ Currency conversion failed: {e}. Using original cost.")
+            
+            print(f"   💰 Cost: {converted_hotel_cost:.2f} {budget_currency}")
+            plan.remaining_budget -= converted_hotel_cost
+            state.plan = plan
+        else:
+            print("   ⚠️ Selected hotel has no offers, cannot update budget.")
+
     else:
         state.selected_hotel_index = None
-        print("   ⚠️ No valid hotel selection made.")
+        print("   ⚠️ No valid hotel selection made or index out of range.")
+
 
     print("   ✅ Hotel analysis complete.")
 

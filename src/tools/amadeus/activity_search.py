@@ -95,16 +95,14 @@ class ActivitySearchTool(BaseTool):
 
                 # Price formatting
                 price_data = item.get("price", {})
-                amount = price_data.get("amount", "N/A")
-                currency = price_data.get("currencyCode", "")
-                price_str = (
-                    f"{amount} {currency}" if amount != "N/A" else "Price not available"
-                )
-
+                amount = float(price_data.get("amount")) if price_data.get("amount") else None
+                currency = price_data.get("currencyCode", "USD") # Default to USD if not provided
+                
                 results.append(
                     ActivityResultState(
                         name=item.get("name", "Unnamed Activity"),
-                        price=price_str,
+                        amount=amount,
+                        currency=currency,
                         booking_link=item.get("bookingLink", "No link available"),
                         short_description=item.get(
                             "shortDescription", "No description"
