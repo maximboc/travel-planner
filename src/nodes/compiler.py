@@ -43,7 +43,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
 
     total_spent = 0.0
 
-    # Flight cost
+    # Flight cost (calculated for budget summary)
     if state.flight_data and state.selected_flight_index is not None:
         flight = state.flight_data[state.selected_flight_index]
         flight_cost_in_budget_currency = _convert_currency(
@@ -51,7 +51,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
         )
         total_spent += flight_cost_in_budget_currency
 
-    # Hotel cost
+    # Hotel cost (calculated for budget summary)
     if state.hotel_data and state.selected_hotel_index is not None:
         hotel = state.hotel_data.hotels[state.selected_hotel_index]
         if hotel.offers:
@@ -61,7 +61,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
             )
             total_spent += hotel_cost_in_budget_currency
 
-    # Activity cost
+    # Activity cost (calculated for budget summary)
     if state.activity_data:
         for activity in state.activity_data:
             activity_cost_in_budget_currency = _convert_currency(
@@ -80,17 +80,21 @@ def compiler_node(state: AgentState, llm: ChatOllama):
     
     state.plan.remaining_budget = remaining_budget
 
-    # Context Construction
+    # --- CONTEXT CONSTRUCTION ---
+    # Flight Context
     flight_context = ""
-    if (
-        state.flight_data
-        and state.selected_flight_index is not None
-        and state.selected_flight_index < len(state.flight_data)
-    ):
+    if state.flight_data and state.selected_flight_index is not None:
+        flight = state.flight_data[state.selected_flight_index]
+        converted_flight_price = _convert_currency(
+            float(flight.price), flight.currency, budget_currency, exchange_rate_tool
+        )
         flight_context = (
-            f"Selected Flight: {state.flight_data[state.selected_flight_index]}"
+            f"Selected Flight: {flight.itineraries[0].segments[0].departure_airport} to "
+            f"{flight.itineraries[0].segments[0].arrival_airport} "
+            f"Price: {converted_flight_price:.2f} {budget_currency}"
         )
 
+    # Hotel Context
     hotel_context = ""
     if (
         state.plan.need_hotel
@@ -99,13 +103,29 @@ def compiler_node(state: AgentState, llm: ChatOllama):
         and state.selected_hotel_index is not None
         and state.selected_hotel_index < len(state.hotel_data.hotels)
     ):
-        hotel_context = (
-            f"Selected Hotel: {state.hotel_data.hotels[state.selected_hotel_index]}"
-        )
+        hotel = state.hotel_data.hotels[state.selected_hotel_index]
+        if hotel.offers:
+            offer = hotel.offers[0]
+            converted_hotel_price = _convert_currency(
+                float(offer.price.total), offer.price.currency, budget_currency, exchange_rate_tool
+            )
+            hotel_context = (
+                f"Selected Hotel: {hotel.name} "
+                f"Price: {converted_hotel_price:.2f} {budget_currency}"
+            )
 
+    # Activity Context
     activity_context = ""
     if state.plan.need_activities and state.activity_data:
-        activity_context = f"Activities: {state.activity_data}"
+        activity_list_formatted = []
+        for activity in state.activity_data:
+            converted_activity_price = _convert_currency(
+                activity.amount, activity.currency, budget_currency, exchange_rate_tool
+            )
+            activity_list_formatted.append(
+                f"- Name: {activity.name}, Price: {converted_activity_price:.2f} {budget_currency}"
+            )
+        activity_context = "Found Activities:\n" + "\n".join(activity_list_formatted)
 
     context = f"""
     Destination: {state.plan.destination}
@@ -127,7 +147,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
     OUTPUT GUIDELINES:
     • **Clarity is Key**: Use clean sections, bullet points, and short paragraphs.
     • **Structure**: Provide a "Full Itinerary Overview" section followed by a "Day-by-Day Breakdown".
-    • **Budget Section**: Use the "Budget Summary" provided in the data. DO NOT recalculate the total. Create a clear "Estimated Costs" section, listing the costs for flights, hotels, and each activity as they are provided in the data. Then, present the "Total Estimated Cost" and "Remaining Budget" from the summary.
+    • **Budget Section**: Use the "Budget Summary" provided in the data. DO NOT recalculate the total. Create a clear "Estimated Costs" section. For each item (flights, hotels, activities), list its name and its price, ENSURING ALL PRICES ARE PRESENTED IN THE SPECIFIED BUDGET CURRENCY. Then, present the "Total Estimated Cost" and "Remaining Budget" from the Budget Summary.
     • **Data Integrity**: Base all information STRICTLY on the data provided. Do not invent details or prices. If data is missing (e.g., no hotels found), politely inform the user.
     • **Tone**: Friendly, concise, expert, and professional.
     """
