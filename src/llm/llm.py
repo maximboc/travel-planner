@@ -126,6 +126,47 @@ class LLMWrapper:
 
         return LLMResponse(content)
 
+    def stream(self, messages: Union[str, List[Dict[str, str]]]):
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+
+        normalized_messages = []
+        for msg in messages:
+            if isinstance(msg, dict):
+                normalized_messages.append(msg)
+            elif hasattr(msg, "type") and hasattr(msg, "content"):
+                role = "system" if msg.type == "system" else msg.type
+                normalized_messages.append({"role": role, "content": msg.content})
+            else:
+                normalized_messages.append({"role": "user", "content": str(msg)})
+        
+        if self.provider == "openai":
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=normalized_messages,
+                temperature=self.temperature,
+                stream=True,
+            )
+            for chunk in stream:
+                yield LLMResponse(chunk.choices[0].delta.content or "")
+
+        elif self.provider == "ollama":
+            from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+
+            lc_messages = []
+            for msg in normalized_messages:
+                role = msg["role"]
+                content = msg["content"]
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=content))
+                elif role == "user":
+                    lc_messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    lc_messages.append(AIMessage(content=content))
+
+            for chunk in self.client.stream(lc_messages):
+                yield chunk
+
 
 class LLMResponse:
 
