@@ -235,7 +235,7 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
                 try:
                     exchange_rate_tool = GetExchangeRateTool()
                     rate_result = exchange_rate_tool.run(
-                        from_currency=hotel_currency, to_currency=budget_currency
+                        {'from_currency': hotel_currency, 'to_currency': budget_currency}
                     )
                     conversion_rate = rate_result["rate"]
                     converted_hotel_cost = hotel_cost * conversion_rate

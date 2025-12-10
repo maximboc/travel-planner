@@ -52,8 +52,7 @@ def activity_node(state: AgentState, amadeus_auth: AmadeusAuth):
                 print(f"   🔁 Converting activity cost from {activity_currency} to {budget_currency}...")
                 try:
                     rate_result = exchange_rate_tool.run(
-                        from_currency=activity_currency,
-                        to_currency=budget_currency
+                        {'from_currency': activity_currency, 'to_currency': budget_currency}
                     )
                     conversion_rate = rate_result['rate']
                     converted_cost = activity_cost * conversion_rate

@@ -1,6 +1,12 @@
 import requests
-from typing import TypedDict, List, Tuple, Dict, Set
+from typing import TypedDict, List, Tuple, Dict, Set, Type
 from langchain.tools import BaseTool
+from pydantic import BaseModel, Field
+
+
+class ExchangeRateInput(BaseModel):
+    from_currency: str = Field(..., description="The currency to convert from (e.g., 'USD', 'JPY')")
+    to_currency: str = Field(..., description="The currency to convert to (e.g., 'EUR', 'USD')")
 
 
 class ExchangeRateResult(TypedDict):
@@ -17,6 +23,7 @@ class GetExchangeRateTool(BaseTool):
         "Get the current exchange rate between two currencies. "
         "This tool helps travel agents provide accurate pricing in the user's preferred currency."
     )
+    args_schema: Type[BaseModel] = ExchangeRateInput
 
     def _run(self, from_currency: str, to_currency: str) -> ExchangeRateResult:
         try:
