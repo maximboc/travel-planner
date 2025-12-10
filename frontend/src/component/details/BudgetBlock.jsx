@@ -1,12 +1,13 @@
 import { useEffect, useMemo } from 'react';
-import { DollarSign, TrendingDown, TrendingUp } from "lucide-react";
+import { DollarSign, TrendingDown, TrendingUp, Loader } from "lucide-react";
 import { useCurrency } from "../../context/CurrencyContext";
 import { formatPrice } from "../../utils/formatPrice";
 
 // A simple utility to get a value from another currency into the target currency
 const convertToCurrency = (amount, fromCurrency, toCurrency, rates) => {
-  if (!amount || !fromCurrency || !toCurrency || !rates) return 0;
-  if (fromCurrency === toCurrency) return amount;
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount) || !fromCurrency || !toCurrency || !rates) return 0;
+  if (fromCurrency === toCurrency) return numericAmount;
 
   const rateKey = `${fromCurrency}_${toCurrency}`;
   const rate = rates[rateKey];
@@ -16,7 +17,7 @@ const convertToCurrency = (amount, fromCurrency, toCurrency, rates) => {
     return 0; // Or handle as an error
   }
   
-  return amount * rate;
+  return numericAmount * rate;
 };
 
 
@@ -29,7 +30,7 @@ export const BudgetBlock = ({
   selectedHotelIndex,
   activities,
 }) => {
-  const { selectedCurrency, rates, ensureRates } = useCurrency();
+  const { selectedCurrency, rates, ensureRates, isLoadingRates } = useCurrency();
 
   // 1. Collect all source currencies from props
   useEffect(() => {
@@ -111,27 +112,46 @@ export const BudgetBlock = ({
             {formatPrice(totalBudgetInSelectedCurrency, selectedCurrency, selectedCurrency, rates)}
           </p>
         </div>
-        <div className="px-2 text-center">
-          <p className="text-xs text-gray-500">Spent</p>
-          <p className="font-bold text-red-600 text-sm">
-            {formatPrice(totalSpent, selectedCurrency, selectedCurrency, rates)}
-          </p>
-        </div>
-        <div className="px-2 text-center">
-          <p className="text-xs text-gray-500">Remaining</p>
-          <p className={`font-bold text-sm ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {formatPrice(remaining, selectedCurrency, selectedCurrency, rates)}
-          </p>
-        </div>
+        {isLoadingRates ? (
+          <>
+            <div className="px-2 text-center">
+              <p className="text-xs text-gray-500">Spent</p>
+              <p className="font-bold text-red-600 text-sm flex items-center justify-center">
+                <Loader className="w-4 h-4 animate-spin" />
+              </p>
+            </div>
+            <div className="px-2 text-center">
+              <p className="text-xs text-gray-500">Remaining</p>
+              <p className="font-bold text-green-600 text-sm flex items-center justify-center">
+                <Loader className="w-4 h-4 animate-spin" />
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="px-2 text-center">
+              <p className="text-xs text-gray-500">Spent</p>
+              <p className="font-bold text-red-600 text-sm">
+                {formatPrice(totalSpent, selectedCurrency, selectedCurrency, rates)}
+              </p>
+            </div>
+            <div className="px-2 text-center">
+              <p className="text-xs text-gray-500">Remaining</p>
+              <p className={`font-bold text-sm ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {formatPrice(remaining, selectedCurrency, selectedCurrency, rates)}
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
-      {spentPercentage > 100 && (
+      {!isLoadingRates && spentPercentage > 100 && (
          <div className="mt-3 text-xs text-red-600 bg-red-50 p-2 rounded-lg flex items-center gap-2">
             <TrendingDown className="w-4 h-4" />
             <span>You are <span className='font-bold'>{formatPrice(Math.abs(remaining), selectedCurrency, selectedCurrency, rates)}</span> over budget.</span>
          </div>
       )}
-       {spentPercentage <= 100 && spentPercentage > 0 && (
+       {!isLoadingRates && spentPercentage <= 100 && spentPercentage > 0 && (
          <div className="mt-3 text-xs text-green-700 bg-green-50 p-2 rounded-lg flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
             <span>You have <span className='font-bold'>{formatPrice(remaining, selectedCurrency, selectedCurrency, rates)}</span> left to spend.</span>
