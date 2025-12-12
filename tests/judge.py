@@ -1,7 +1,7 @@
 import re
 from langchain_core.messages import HumanMessage
 import uuid
-from src.utils.monitoring import TokenUsageTracker
+from src.utils.token_usage import TokenUsageTracker
 from langchain_ollama import ChatOllama
 from langgraph.prebuilt import create_react_agent
 
@@ -12,6 +12,7 @@ def create_judge_agent():
     # Initialize LLM
     # model_name = "tensortemplar/prometheus2:7b-fp16"
     model_name = "llama3.1:8b"
+    model_provider = "ollama"
     llm = ChatOllama(model=model_name, temperature=0)
 
     # Define available tools
@@ -19,7 +20,7 @@ def create_judge_agent():
 
     agent = create_react_agent(llm, tools)
 
-    return agent, model_name
+    return agent, model_name, model_provider
 
 
 # This prompt is tuned for Llama 3 8b
@@ -86,6 +87,9 @@ def run_single_evaluation(
     user_prompt,
     agent_response,
     judge_llm,
+    judge_llm_name: str,
+    judge_model_provider: str,
+    scenario_id: str,
 ):
     # Construct prompt
 
@@ -93,9 +97,18 @@ def run_single_evaluation(
         user_prompt=user_prompt, agent_response=agent_response
     )
 
+    cost_tracker = TokenUsageTracker(
+        scenario_id=scenario_id,
+        model_name=judge_llm_name,
+        model_provider=judge_model_provider,
+    )
+    config = {
+        "callbacks": [cost_tracker],
+    }
+
     # Generate Judge Response
     # Assuming 'judge_llm' is your Llama 3.1 8b interface
-    response = judge_llm.invoke({"messages": [HumanMessage(content=prompt)]})
+    response = judge_llm.invoke({"messages": [HumanMessage(content=prompt)]}, config)
     judge_raw_output = response["messages"][-1].content
 
     # Parse
