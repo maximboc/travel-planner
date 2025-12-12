@@ -76,24 +76,21 @@ class TokenUsageTracker(BaseCallbackHandler):
         try:
             if response.generations and response.generations[0]:
                 generation = response.generations[0][0]
-                if hasattr(generation, "message") and hasattr(
-                    generation.message, "usage_metadata"
+                if (
+                    hasattr(generation, "message")
+                    and hasattr(generation.message, "usage_metadata")
+                    and generation.message.usage_metadata is not None
                 ):
                     usage = generation.message.usage_metadata
                     prompt_tokens = usage.get("input_tokens", 0)
                     completion_tokens = usage.get("output_tokens", 0)
                     total_tokens = usage.get("total_tokens", 0)
 
-                elif response.llm_output:
-                    prompt_tokens = response.llm_output.get("token_usage", {}).get(
-                        "prompt_tokens", 0
-                    )
-                    completion_tokens = response.llm_output.get("token_usage", {}).get(
-                        "completion_tokens", 0
-                    )
-                    total_tokens = response.llm_output.get("token_usage", {}).get(
-                        "total_tokens", 0
-                    )
+                elif response.llm_output is not None:
+                    token_usage = response.llm_output.get("token_usage", {})
+                    prompt_tokens = token_usage.get("prompt_tokens", 0)
+                    completion_tokens = token_usage.get("completion_tokens", 0)
+                    total_tokens = token_usage.get("total_tokens", 0)
         except Exception as e:
             print(f"Warning: Could not extract token usage: {e}")
 
