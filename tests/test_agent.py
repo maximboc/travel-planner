@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-print(f"DEBUG: Adding to sys.path: {str(Path(__file__).parent.parent)}")
 import os
 import uuid
 import csv
