@@ -1,7 +1,8 @@
 from langgraph.graph import END
 from langchain_ollama import ChatOllama
 from langsmith import traceable
-
+from langchain_core.runnables import RunnableConfig
+from typing import Optional
 from src.states import AgentState, PlanDetailsState
 
 
@@ -27,7 +28,9 @@ def check_review_condition_node(state: AgentState):
 
 
 @traceable
-def reviewer_node(state: AgentState, llm: ChatOllama):
+def reviewer_node(
+    state: AgentState, llm: ChatOllama, config: Optional[RunnableConfig] = None
+):
     print("\n⚖️  REVIEWER: Quality Control Check...")
 
     plan: PlanDetailsState | None = state.plan
@@ -86,7 +89,7 @@ def reviewer_node(state: AgentState, llm: ChatOllama):
     - If bad (wrong dates, wrong city, hallucinations, budget exceeded): Reply "REJECT: [Reason]". When budget is exceeded, don't hesitate to tell to select less activities.
     """
 
-    raw = llm.invoke(prompt).content
+    raw = llm.invoke(prompt, config=config).content
     response_str = raw if isinstance(raw, str) else str(raw)
     response = response_str.strip()
 

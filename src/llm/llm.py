@@ -2,9 +2,10 @@ import os
 from typing import List, Dict, Any, Union, Optional
 from openai import OpenAI
 from langchain_ollama import ChatOllama
+from langchain_core.runnables import Runnable, RunnableConfig
 
 
-class LLMWrapper:
+class LLMWrapper(Runnable):
 
     def __init__(
         self,
@@ -85,7 +86,11 @@ class LLMWrapper:
 
         return new_instance
 
-    def invoke(self, messages: Union[str, List[Dict[str, str]]]) -> "LLMResponse":
+    def invoke(
+        self,
+        messages: Union[str, List[Dict[str, str]]],
+        config: Optional[RunnableConfig] = None,
+    ) -> "LLMResponse":
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
@@ -121,12 +126,16 @@ class LLMWrapper:
                 elif role == "assistant":
                     lc_messages.append(AIMessage(content=content))
 
-            response = self.client.invoke(lc_messages)
+            response = self.client.invoke(lc_messages, config)
             content = response.content
 
         return LLMResponse(content)
 
-    def stream(self, messages: Union[str, List[Dict[str, str]]]):
+    def stream(
+        self,
+        messages: Union[str, List[Dict[str, str]]],
+        config: Optional[RunnableConfig] = None,
+    ):
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
@@ -139,7 +148,7 @@ class LLMWrapper:
                 normalized_messages.append({"role": role, "content": msg.content})
             else:
                 normalized_messages.append({"role": "user", "content": str(msg)})
-        
+
         if self.provider == "openai":
             stream = self.client.chat.completions.create(
                 model=self.model,
@@ -164,7 +173,7 @@ class LLMWrapper:
                 elif role == "assistant":
                     lc_messages.append(AIMessage(content=content))
 
-            for chunk in self.client.stream(lc_messages):
+            for chunk in self.client.stream(lc_messages, config):
                 yield chunk
 
 

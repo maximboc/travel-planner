@@ -4,7 +4,8 @@ from langsmith import traceable
 from langchain_core.messages.system import SystemMessage
 from langchain_core.messages.ai import AIMessage
 from langgraph.types import Command
-
+from langchain_core.runnables import RunnableConfig
+from typing import Optional
 from src.states import AgentState, TravelClass
 
 
@@ -13,7 +14,9 @@ def passenger_skipped(state: AgentState) -> bool:
 
 
 @traceable
-def passenger_node(state: AgentState, llm: ChatOllama) -> AgentState:
+def passenger_node(
+    state: AgentState, llm: ChatOllama, config: Optional[RunnableConfig] = None
+) -> AgentState:
     print("\n👥 PASSENGER ANALYZER: Extracting traveler details...")
 
     if passenger_skipped(state):
@@ -60,7 +63,8 @@ Return JSON:
         [
             SystemMessage(content="You are a passenger extractor expert"),
             {"role": "user", "content": PROMPT},
-        ]
+        ],
+        config=config,
     )
     content = (
         response.content if isinstance(response.content, str) else str(response.content)

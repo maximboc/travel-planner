@@ -3,6 +3,7 @@ from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
 from src.tools import CitySearchTool, AmadeusAuth, CitySearchResult
+from langchain_core.runnables import RunnableConfig
 
 from src.states import AgentState, PlanDetailsState
 from typing import Optional, Tuple
@@ -10,7 +11,7 @@ from typing import Optional, Tuple
 
 @traceable
 def city_resolver_node(
-    state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth
+    state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth, config: Optional[RunnableConfig] = None
 ) -> AgentState:
     print("\n📍 RESOLVER: Finding City Codes...")
     plan: PlanDetailsState | None = state.plan
@@ -45,7 +46,7 @@ def city_resolver_node(
         If you are not 100% sure, return 'UNKNOWN'.
         """
 
-        code = llm.invoke(fallback_prompt).content.strip().upper()
+        code = llm.invoke(fallback_prompt, config=config).content.strip().upper()
 
         if len(code) == 3 and code.isalpha() and code != "UNKNOWN":
             print(f"   🤖 LLM Resolved: {code}")

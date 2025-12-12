@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 import json
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, AIMessage
 from langsmith import traceable
 from langgraph.types import Command
+from langchain_core.runnables import RunnableConfig
 
 from ..states import AgentState, PlanDetailsState
 from ..tools import get_user_location
@@ -23,7 +24,9 @@ def planner_skipped(state: AgentState) -> bool:
 
 
 @traceable
-def planner_node(state: AgentState, llm: ChatOllama):
+def planner_node(
+    state: AgentState, llm: ChatOllama, config: Optional[RunnableConfig] = None
+):
     print("\n🧠 PLANNER: Analyzing request...")
     if state.last_node is not None and state.last_node != "planner_agent":
         return Command(goto=state.last_node, update=state)
@@ -88,7 +91,8 @@ Return ONLY the JSON object.
         [
             SystemMessage(content="You are a travel planning extraction engine."),
             {"role": "user", "content": PROMPT},
-        ]
+        ],
+        config=config,
     )
     content: Any = response.content
 
