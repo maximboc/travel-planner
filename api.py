@@ -395,7 +395,7 @@ async def stream_agent_events(
     """Stream events from LangGraph execution"""
 
     tracker = TokenUsageTracker(
-        scenario_id=session_id, model_name=MODEL_PROVIDER, model_provider=MODEL_PROVIDER
+        scenario_id=session_id, model_name=MODEL_NAME, model_provider=MODEL_PROVIDER
     )
 
     config = {

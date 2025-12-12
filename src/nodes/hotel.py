@@ -3,7 +3,8 @@ from langchain_core.messages import AIMessage, SystemMessage
 from datetime import datetime
 import json
 from langchain_ollama import ChatOllama
-
+from langchain_core.runnables import RunnableConfig
+from typing import Optional
 from langgraph.types import Command
 
 from src.states import HotelDetails, HotelSearchState
@@ -58,7 +59,12 @@ def format_hotels_for_llm_compact(hotels: list[HotelDetails]) -> str:
 
 
 @traceable
-def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
+def hotel_node(
+    state: AgentState,
+    amadeus_auth: AmadeusAuth,
+    llm: ChatOllama,
+    config: Optional[RunnableConfig] = None,
+):
     print("\n🏨 HOTEL AGENT: Searching...")
     plan: PlanDetailsState | None = state.plan
 
@@ -119,7 +125,7 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
                     destination_city_code :{state.city_code}
                     Provide a list of 3 hotels in the destination city with the following details for each hotel
                 """
-                response = llm.invoke(hotel_search_prompt)
+                response = llm.invoke(hotel_search_prompt, config=config)
                 content = response.content
                 hotels = json.loads(content.strip())
                 state.hotel_data = HotelSearchState(
@@ -196,7 +202,8 @@ def hotel_node(state: AgentState, amadeus_auth: AmadeusAuth, llm: ChatOllama):
                 content="You are a hotel recommendation engine. Output strictly valid JSON."
             ),
             {"role": "user", "content": PROMPT},
-        ]
+        ],
+        config=config,
     )
 
     content = response.content
