@@ -34,11 +34,11 @@ JUDGE_PROMPT_TEMPLATE = """
 
     -----------------------------------
     INSTRUCTIONS:
-    1. First, write a short analysis (2-3 sentences) criticizing the response.
+    1. First, write a short analysis (2-3 sentences) of the response, outlining its strengths and weaknesses.
     2. Then, assign scores (0-10).
 
     CRITERIA:
-    - RELEVANCE: Does it answer the specific question asked regarding dates and destinations ? Not that the activites should not necessarily match the user's interests exactly, but should be appropriate for the location and time of year.
+    - RELEVANCE: Does it answer the specific question asked regarding dates, destinations and user's interests?
     - HELPFULNESS: Does it give specific advice (e.g., naming neighborhoods, transport modes) rather than generic fluff?
     - LOGIC: Is the advice physically possible? (e.g. no trains to Hawaii).
 
