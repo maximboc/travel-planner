@@ -5,7 +5,8 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import AIMessage
 from langsmith import traceable
 from langgraph.types import Command
-
+from langchain_core.runnables import RunnableConfig
+from typing import Optional
 from src.states import AgentState, PlanDetailsState, FlightSearchResultState
 from src.tools import FlightSearchTool, AmadeusAuth, GetExchangeRateTool
 
@@ -45,7 +46,12 @@ def format_flights_for_llm_compact(results: list[FlightSearchResultState]) -> st
 
 
 @traceable
-def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
+def flight_node(
+    state: AgentState,
+    llm: ChatOllama,
+    amadeus_auth: AmadeusAuth,
+    config: Optional[RunnableConfig] = None,
+):
     print("\n✈️  FLIGHT AGENT: Searching...")
     if flight_skipped(state):
         print(
@@ -134,7 +140,9 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
                 Ensure dates align with the requested departure ({plan.departure_date}) and return ({plan.arrival_date}) dates.
             """
 
-            flight_search_response = llm.invoke(flight_search_prompt).content
+            flight_search_response = llm.invoke(
+                flight_search_prompt, config=config
+            ).content
 
             try:
                 response_clean = flight_search_response.strip()
@@ -199,7 +207,7 @@ def flight_node(state: AgentState, llm: ChatOllama, amadeus_auth: AmadeusAuth):
     """
 
     try:
-        response_content = llm.invoke(PROMPT).content
+        response_content = llm.invoke(PROMPT, config=config).content
         response_content = (
             response_content
             if isinstance(response_content, str)

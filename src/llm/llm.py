@@ -1,10 +1,11 @@
 import os
 from typing import List, Dict, Any, Union, Optional
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain_core.runnables import Runnable, RunnableConfig
 
 
-class LLMWrapper:
+class LLMWrapper(Runnable):
 
     def __init__(
         self,
@@ -30,13 +31,18 @@ class LLMWrapper:
             if not base_url:
                 raise ValueError("base_url is required for openai provider")
 
-            self.client = OpenAI(
+            self._base_client = ChatOpenAI(
+                model=model,
+                temperature=temperature,
                 base_url=base_url,
                 api_key=api_key
                 or os.environ.get("HF_TOKEN")
                 or os.environ.get("OPENAI_API_KEY"),
+                tags=self.tags,
+                metadata=self.metadata,
+                callbacks=self.callbacks,
             )
-            self._base_client = None
+            self.client = self._base_client
         elif self.provider == "ollama":
             try:
                 self._base_client = ChatOllama(
@@ -76,7 +82,7 @@ class LLMWrapper:
             callbacks=new_callbacks,
         )
 
-        if self.provider == "ollama" and new_instance._base_client:
+        if self.provider in ["ollama", "openai"] and new_instance._base_client:
             new_instance.client = new_instance._base_client.with_config(
                 tags=new_tags,
                 metadata=new_metadata,
@@ -85,33 +91,19 @@ class LLMWrapper:
 
         return new_instance
 
-    def invoke(self, messages: Union[str, List[Dict[str, str]]]) -> "LLMResponse":
+    def invoke(
+        self,
+        messages: Union[str, List[Dict[str, str]]],
+        config: Optional[RunnableConfig] = None,
+    ) -> "LLMResponse":
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
-        normalized_messages = []
+        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+
+        lc_messages = []
         for msg in messages:
             if isinstance(msg, dict):
-                normalized_messages.append(msg)
-            elif hasattr(msg, "type") and hasattr(msg, "content"):
-                role = "system" if msg.type == "system" else msg.type
-                normalized_messages.append({"role": role, "content": msg.content})
-            else:
-                normalized_messages.append({"role": "user", "content": str(msg)})
-
-        if self.provider == "openai":
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                messages=normalized_messages,
-                temperature=self.temperature,
-            )
-            content = completion.choices[0].message.content
-
-        elif self.provider == "ollama":
-            from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-
-            lc_messages = []
-            for msg in normalized_messages:
                 role = msg["role"]
                 content = msg["content"]
                 if role == "system":
@@ -120,41 +112,35 @@ class LLMWrapper:
                     lc_messages.append(HumanMessage(content=content))
                 elif role == "assistant":
                     lc_messages.append(AIMessage(content=content))
+            elif hasattr(msg, "type") and hasattr(msg, "content"):
+                role = "system" if msg.type == "system" else msg.type
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=msg.content))
+                elif role == "user":
+                    lc_messages.append(HumanMessage(content=msg.content))
+                elif role == "assistant":
+                    lc_messages.append(AIMessage(content=msg.content))
+            else:
+                lc_messages.append(HumanMessage(content=str(msg)))
 
-            response = self.client.invoke(lc_messages)
-            content = response.content
+        response = self.client.invoke(lc_messages, config)
+        content = response.content
 
         return LLMResponse(content)
 
-    def stream(self, messages: Union[str, List[Dict[str, str]]]):
+    def stream(
+        self,
+        messages: Union[str, List[Dict[str, str]]],
+        config: Optional[RunnableConfig] = None,
+    ):
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
-        normalized_messages = []
+        from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+
+        lc_messages = []
         for msg in messages:
             if isinstance(msg, dict):
-                normalized_messages.append(msg)
-            elif hasattr(msg, "type") and hasattr(msg, "content"):
-                role = "system" if msg.type == "system" else msg.type
-                normalized_messages.append({"role": role, "content": msg.content})
-            else:
-                normalized_messages.append({"role": "user", "content": str(msg)})
-        
-        if self.provider == "openai":
-            stream = self.client.chat.completions.create(
-                model=self.model,
-                messages=normalized_messages,
-                temperature=self.temperature,
-                stream=True,
-            )
-            for chunk in stream:
-                yield LLMResponse(chunk.choices[0].delta.content or "")
-
-        elif self.provider == "ollama":
-            from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-
-            lc_messages = []
-            for msg in normalized_messages:
                 role = msg["role"]
                 content = msg["content"]
                 if role == "system":
@@ -163,9 +149,19 @@ class LLMWrapper:
                     lc_messages.append(HumanMessage(content=content))
                 elif role == "assistant":
                     lc_messages.append(AIMessage(content=content))
+            elif hasattr(msg, "type") and hasattr(msg, "content"):
+                role = "system" if msg.type == "system" else msg.type
+                if role == "system":
+                    lc_messages.append(SystemMessage(content=msg.content))
+                elif role == "user":
+                    lc_messages.append(HumanMessage(content=msg.content))
+                elif role == "assistant":
+                    lc_messages.append(AIMessage(content=msg.content))
+            else:
+                lc_messages.append(HumanMessage(content=str(msg)))
 
-            for chunk in self.client.stream(lc_messages):
-                yield chunk
+        for chunk in self.client.stream(lc_messages, config):
+            yield chunk
 
 
 class LLMResponse:

@@ -2,11 +2,14 @@ from langchain_ollama import ChatOllama
 from langsmith import traceable
 from src.states import AgentState
 from src.tools.exchange_rate import get_exchange_rates
-from typing import Set, Tuple
+from typing import Set, Tuple, Optional
+from langchain_core.runnables import RunnableConfig
 
 
 @traceable
-def compiler_node(state: AgentState, llm: ChatOllama):
+def compiler_node(
+    state: AgentState, llm: ChatOllama, config: Optional[RunnableConfig] = None
+):
     print("\n✍️  COMPILER: Drafting Itinerary...")
 
     feedback_context = ""
@@ -130,7 +133,7 @@ def compiler_node(state: AgentState, llm: ChatOllama):
 
     prompt = f"{system_instruction}\n\nDATA:\n{context}\n\nWrite the itinerary:"
     
-    response = llm.invoke(prompt)
+    response = llm.invoke(prompt, config=config)
     state.final_itinerary = response.content
     
     return state
