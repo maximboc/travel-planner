@@ -25,29 +25,29 @@ def create_judge_agent():
 
 # This prompt is tuned for Llama 3 8b
 JUDGE_PROMPT_TEMPLATE = """
-You are a Travel Guide Evaluator.
-Your goal is to evaluate if the AI's travel advice is helpful and makes sense.
+    You are a Travel Guide Evaluator.
+    Your goal is to evaluate if the AI's travel advice is helpful and makes sense.
 
-USER QUESTION: "{user_prompt}"
+    USER QUESTION: "{user_prompt}"
 
-AI RESPONSE: "{agent_response}"
+    AI RESPONSE: "{agent_response}"
 
------------------------------------
-INSTRUCTIONS:
-1. First, write a short analysis (2-3 sentences) criticizing the response.
-2. Then, assign scores (0-10).
+    -----------------------------------
+    INSTRUCTIONS:
+    1. First, write a short analysis (2-3 sentences) criticizing the response.
+    2. Then, assign scores (0-10).
 
-CRITERIA:
-- RELEVANCE: Does it answer the specific question asked?
-- HELPFULNESS: Does it give specific advice (e.g., naming neighborhoods, transport modes) rather than generic fluff?
-- LOGIC: Is the advice physically possible? (e.g. no trains to Hawaii).
+    CRITERIA:
+    - RELEVANCE: Does it answer the specific question asked regarding dates and destinations ? Not that the activites should not necessarily match the user's interests exactly, but should be appropriate for the location and time of year.
+    - HELPFULNESS: Does it give specific advice (e.g., naming neighborhoods, transport modes) rather than generic fluff?
+    - LOGIC: Is the advice physically possible? (e.g. no trains to Hawaii).
 
-FORMAT:
-Analysis: [Your text here]
-Relevance Score: [0-10]
-Helpfulness Score: [0-10]
-Logic Score: [0-10]
-"""
+    FORMAT:
+    Analysis: [Your text here]
+    Relevance Score: [0-10]
+    Helpfulness Score: [0-10]
+    Logic Score: [0-10]
+    """
 
 
 def parse_judge_output(judge_output):
@@ -59,9 +59,10 @@ def parse_judge_output(judge_output):
 
     # Extract Analysis
     if "Analysis:" in judge_output:
-        scores["analysis"] = (
+        analysis_text = (
             judge_output.split("Analysis:")[1].split("Score:")[0].strip()
         )
+        scores["analysis"] = analysis_text.replace(",", ";").replace("\n", " ")
 
     # Extract Scores using Regex to find "Word Score: Number"
     # Matches "Relevance Score: 8" or "Relevance: 8"
