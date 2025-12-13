@@ -67,8 +67,13 @@ def run_batch_evaluation_for_travel_agent(
                     "callbacks": [cost_tracker],
                 }
 
-                state = AgentState()
-                state.messages.append(HumanMessage(content=user_prompt))
+                state = {
+                    "messages": [HumanMessage(content=user_prompt)],
+                    "revision_count": 0,
+                    "with_planner": use_planner,
+                    "with_tools": use_tools,
+                    "with_reasoning": use_reasoning,
+                }
 
                 # The travel agent returns the full state
                 final_state = judged_llm.invoke(state, config=config)
