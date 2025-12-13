@@ -1,4 +1,5 @@
 import re
+import json
 from langchain_core.messages import HumanMessage
 import uuid
 from src.utils.token_usage import TokenUsageTracker
@@ -23,10 +24,11 @@ def create_judge_agent():
     return agent, model_name, model_provider
 
 
-# This prompt is tuned for Llama 3 8b
 JUDGE_PROMPT_TEMPLATE = """
     You are a Travel Guide Evaluator.
     Your goal is to evaluate if the AI's travel advice is helpful and makes sense.
+    The AI model you are evaluating is good at finding flights, hotels, and planning trips, but not at suggesting specific activities.
+    Your evaluation should focus on the core travel planning capabilities.
 
     USER QUESTION: "{user_prompt}"
 
@@ -34,52 +36,60 @@ JUDGE_PROMPT_TEMPLATE = """
 
     -----------------------------------
     INSTRUCTIONS:
-    1. First, write a short analysis (2-3 sentences) of the response, outlining its strengths and weaknesses.
-    2. Then, assign scores (0-10).
+    1. First, write a short analysis (2-3 sentences) of the response, outlining its strengths and weaknesses based on the criteria below.
+    2. Then, assign scores (0-10 for each criterion).
+    3. Output your response as a JSON object, with no comments or additional text outside the JSON.
 
     CRITERIA:
-    - RELEVANCE: Does it answer the specific question asked regarding dates, destinations and user's interests?
-    - HELPFULNESS: Does it give specific advice (e.g., naming neighborhoods, transport modes) rather than generic fluff?
-    - LOGIC: Is the advice physically possible? (e.g. no trains to Hawaii).
+    - RELEVANCE: Does the response correctly identify the user's core requirements? This includes:
+        - Origin and destination cities.
+        - Correct travel dates.
+        - Number of people traveling.
+        - Overall budget constraints.
+      A high score means all these core requirements are met.
+    - HELPFULNESS: Does the response provide concrete and accurate travel options? This includes:
+        - Realistic flight options (if requested).
+        - Suitable hotel/accommodation suggestions.
+        - A coherent travel plan.
+      Be lenient on the quality or specificity of activity/tourist attraction suggestions. Focus on the core booking and planning aspects.
+    - LOGIC: Is the proposed travel plan physically possible and logical? (e.g., realistic travel times, no geographically impossible suggestions like trains to Hawaii).
 
     FORMAT:
-    Analysis: [Your text here]
-    Relevance Score: [0-10]
-    Helpfulness Score: [0-10]
-    Logic Score: [0-10]
+    ```json
+    {{
+        "analysis": "Your analysis here",
+        "relevance_score": 0,
+        "helpfulness_score": 0,
+        "logic_score": 0
+    }}
+    ```
     """
 
 
 def parse_judge_output(judge_output):
     """
-    Robust parser for smaller LLM outputs.
-    It looks for 'Score: X' patterns even if the model chats a bit.
+    Parses the JSON output from the judge LLM.
     """
     scores = {"relevance": 0, "helpfulness": 0, "logic": 0, "analysis": ""}
 
-    # Extract Analysis
-    if "Analysis:" in judge_output:
-        analysis_text = (
-            judge_output.split("Analysis:")[1].split("Score:")[0].strip()
-        )
-        scores["analysis"] = analysis_text.replace(",", ";").replace("\n", " ")
+    try:
+        # Assuming the LLM wraps the JSON in markdown code block
+        json_str_match = re.search(r"```json\n(.*)\n```", judge_output, re.DOTALL)
+        if json_str_match:
+            json_output = json.loads(json_str_match.group(1))
+        else:
+            # If no markdown block, try to parse directly.
+            # Some LLMs might not wrap in markdown when asked for pure JSON.
+            json_output = json.loads(judge_output)
 
-    # Extract Scores using Regex to find "Word Score: Number"
-    # Matches "Relevance Score: 8" or "Relevance: 8"
-    rel_match = re.search(
-        r"Relevance(?: Score)?:?\s*(\d+)", judge_output, re.IGNORECASE
-    )
-    help_match = re.search(
-        r"Helpfulness(?: Score)?:?\s*(\d+)", judge_output, re.IGNORECASE
-    )
-    log_match = re.search(r"Logic(?: Score)?:?\s*(\d+)", judge_output, re.IGNORECASE)
-
-    if rel_match:
-        scores["relevance"] = int(rel_match.group(1))
-    if help_match:
-        scores["helpfulness"] = int(help_match.group(1))
-    if log_match:
-        scores["logic"] = int(log_match.group(1))
+        scores["analysis"] = json_output.get("analysis", "").replace(",", ";").replace("\n", " ")
+        scores["relevance"] = int(json_output.get("relevance_score", 0))
+        scores["helpfulness"] = int(json_output.get("helpfulness_score", 0))
+        scores["logic"] = int(json_output.get("logic_score", 0))
+    except json.JSONDecodeError as e:
+        print(f"Warning: Could not decode JSON from judge output. Error: {e}. Output: {judge_output}")
+        # If JSON decoding fails, we fall back to default 0 scores and empty analysis.
+        # The previous regex-based parsing is no longer suitable with the new prompt.
 
     return scores
 
