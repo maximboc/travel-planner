@@ -587,6 +587,25 @@ async def get_evaluation_results():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/get_prompts")
+async def get_prompts():
+    prompts = []
+    file_path = Path("tests") / "prompts.csv"
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Prompts file not found.",
+        )
+    try:
+        with open(file_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for i, row in enumerate(reader):
+                prompts.append({"id": i, "user_prompt": row[0]})
+        return prompts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 from src.tools.exchange_rate import GetExchangeRateTool
 exchange_rate_tool = GetExchangeRateTool()
 
