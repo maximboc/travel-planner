@@ -13,3 +13,4 @@ black
 fastapi
 uvicorn
 langchain_core
+seaborn

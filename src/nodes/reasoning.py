@@ -53,7 +53,7 @@ def reviewer_node(
         and state.selected_flight_index is not None
         and state.selected_flight_index < len(state.flight_data)
     ):
-        flight_cost = state.flight_data[state.selected_flight_index].price
+        flight_cost = float(state.flight_data[state.selected_flight_index].price)
 
     hotel_cost = 0
     if (
@@ -63,7 +63,9 @@ def reviewer_node(
         and state.selected_hotel_index is not None
         and state.selected_hotel_index < len(state.hotel_data.hotels)
     ):
-        hotel_cost = state.hotel_data.hotels[state.selected_hotel_index].price
+        hotel_cost = float(
+            state.hotel_data.hotels[state.selected_hotel_index].offers[0].price.total
+        )
 
     # Critique Prompt
     prompt = f"""
