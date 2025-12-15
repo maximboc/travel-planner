@@ -1,6 +1,16 @@
 # Travel Planner
 
+## Authors
+This project was made by :
+- Matéo Lelong
+- Maxim Bocquillion
+- Samy Yacef
+
+
+[Link to the Demonstration](https://youtu.be/arBmsSlphOM)
+
 ![front](./assets/front.png)
+
 
 ## Environment Variables (.env)
 
