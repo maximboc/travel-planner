@@ -9,7 +9,7 @@ This project was made by :
 
 [Link to the Demonstration](https://youtu.be/arBmsSlphOM)
 
-![front](./assets/front.png)
+![travelbro](./assets/travelbro.png)
 
 
 ## Environment Variables (.env)
