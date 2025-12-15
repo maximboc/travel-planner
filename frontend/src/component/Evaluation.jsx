@@ -11,92 +11,177 @@ import {
 
 // Helper to determine the color for scores
 const getScoreColor = (score) => {
-  if (score >= 8) return "text-green-600";
+  if (score >= 8) return "text-green-700";
   if (score >= 5) return "text-yellow-600";
   return "text-red-600";
 };
 
 // A single row in the evaluation table
-const EvaluationRow = ({ item, index }) => {
+
+const EvaluationRow = ({ item, index, prompts }) => {
+
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const user_prompt = prompts.length > 0 ? prompts[index % prompts.length]?.user_prompt : '';
+
+
+
   return (
+
     <tbody
+
       className={`transition-all duration-300 ${
+
         index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+
       }`}
+
     >
+
       <tr
+
         className="cursor-pointer hover:bg-purple-50"
+
         onClick={() => setIsExpanded(!isExpanded)}
+
       >
+
         <td className="p-4 text-xs text-gray-500">{index + 1}</td>
-        <td className="p-4 text-sm font-medium text-gray-800 max-w-xs truncate">
-          {item.user_prompt}
+
+        <td className="p-4 text-sm font-medium text-gray-800 max-w-sm truncate">
+
+          {user_prompt}
+
         </td>
+
         <td className="p-4 text-center">
+
           <span
+
             className={`font-bold text-lg ${getScoreColor(item.relevance)}`}
+
           >
+
             {item.relevance}
+
           </span>
+
         </td>
+
         <td className="p-4 text-center">
+
           <span
+
             className={`font-bold text-lg ${getScoreColor(item.helpfulness)}`}
+
           >
+
             {item.helpfulness}
+
           </span>
+
         </td>
+
         <td className="p-4 text-center">
+
           <span className={`font-bold text-lg ${getScoreColor(item.logic)}`}>
+
             {item.logic}
+
           </span>
+
         </td>
+
+        <td className="p-4 text-sm text-gray-600 max-w-lg truncate">
+
+          {item.analysis}
+
+        </td>
+
       </tr>
+
       {isExpanded && (
-        <tr className="bg-gray-100">
-          <td colSpan="5" className="p-6">
+
+        <tr className="bg-purple-50">
+
+          <td colSpan="6" className="p-6">
+
             <div className="space-y-4">
+
               <div>
+
                 <h4 className="font-bold text-gray-700">User Prompt</h4>
+
                 <p className="text-sm text-gray-600 mt-1">
-                  {item.user_prompt}
+
+                  {user_prompt}
+
                 </p>
+
               </div>
+
               <div>
+
                 <h4 className="font-bold text-gray-700">Agent Response</h4>
+
                 <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+
                   {item.agent_response}
+
                 </p>
+
               </div>
+
               <div>
+
                 <h4 className="font-bold text-gray-700">Judge's Analysis</h4>
+
                 <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+
                   {item.analysis}
+
                 </p>
+
               </div>
+
               {item.conditions && (
+
                 <div>
+
                   <h4 className="font-bold text-gray-700">
+
                     Acceptance Conditions
+
                   </h4>
+
                   <p className="text-sm text-gray-600 mt-1">
+
                     {item.conditions}
+
                   </p>
+
                 </div>
+
               )}
+
             </div>
+
           </td>
+
         </tr>
+
       )}
+
     </tbody>
+
   );
+
 };
 
 // The main component for the evaluation page
 export const Evaluation = () => {
   const [results, setResults] = useState([]);
+  const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -105,6 +190,19 @@ export const Evaluation = () => {
   const [useTools, setUseTools] = useState(true);
   const [useReasoning, setUseReasoning] = useState(true);
   const logContainerRef = useRef(null);
+
+  const fetchPrompts = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/get_prompts");
+      if (!res.ok) {
+        throw new Error(`Failed to fetch prompts: ${res.statusText}`);
+      }
+      const data = await res.json();
+      setPrompts(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   const fetchEvaluationResults = async () => {
     try {
@@ -117,7 +215,8 @@ export const Evaluation = () => {
         } else {
           throw new Error(`Failed to fetch: ${res.statusText}`);
         }
-      } else {
+      }
+      else {
         const data = await res.json();
         setResults(data);
       }
@@ -130,6 +229,7 @@ export const Evaluation = () => {
 
   useEffect(() => {
     fetchEvaluationResults();
+    fetchPrompts();
   }, []);
 
   useEffect(() => {
@@ -181,32 +281,32 @@ export const Evaluation = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden">
-      <div className="p-6 border-b border-purple-100 flex justify-between items-center">
+    <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="p-6 border-b border-purple-100 flex justify-between items-center bg-gray-50">
         <div className="flex items-center gap-3">
           <Scale className="w-8 h-8 text-purple-600" />
           <div>
             <h2 className="text-xl font-bold text-gray-800">
-              LLM-as-Judge Evaluation
+              Judge Evaluation
             </h2>
             <p className="text-sm text-gray-600">
-              Run and review agent performance based on predefined test prompts.
+              Run and review agent performance.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center">
-            <input type="checkbox" id="usePlanner" checked={usePlanner} onChange={() => setUsePlanner(!usePlanner)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
-            <label htmlFor="usePlanner" className="ml-2 block text-sm text-gray-900">Planner</label>
-          </div>
-          <div className="flex items-center">
-            <input type="checkbox" id="useTools" checked={useTools} onChange={() => setUseTools(!useTools)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
-            <label htmlFor="useTools" className="ml-2 block text-sm text-gray-900">Tools</label>
-          </div>
-          <div className="flex items-center">
-            <input type="checkbox" id="useReasoning" checked={useReasoning} onChange={() => setUseReasoning(!useReasoning)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" />
-            <label htmlFor="useReasoning" className="ml-2 block text-sm text-gray-900">Reasoning</label>
-          </div>
+                      <input type="checkbox" id="usePlanner" checked={usePlanner} onChange={() => setUsePlanner(!usePlanner)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mr-2" />
+                      <label htmlFor="usePlanner" className="ml-2 block text-sm text-gray-900 cursor-pointer">Planner</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input type="checkbox" id="useTools" checked={useTools} onChange={() => setUseTools(!useTools)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mr-2" />
+                      <label htmlFor="useTools" className="ml-2 block text-sm text-gray-900 cursor-pointer">Tools</label>
+                    </div>
+                    <div className="flex items-center">
+                      <input type="checkbox" id="useReasoning" checked={useReasoning} onChange={() => setUseReasoning(!useReasoning)} className="h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mr-2" />
+                      <label htmlFor="useReasoning" className="ml-2 block text-sm text-gray-900 cursor-pointer">Reasoning</label>
+                    </div>
           <button
             onClick={handleRunEvaluation}
             disabled={isRunning}
@@ -230,10 +330,10 @@ export const Evaluation = () => {
       {isRunning || logs.length > 0 ? (
         <div
           ref={logContainerRef}
-          className="h-64 bg-gray-900 text-white font-mono text-xs p-4 overflow-y-auto"
+          className="h-64 bg-gray-900 text-white font-mono text-xs p-4 overflow-y-auto rounded-lg"
         >
           {logs.map((log, i) => (
-            <p key={i} className={log.type === 'stderr' || log.type === 'error' ? 'text-red-400' : 'text-gray-300'}>
+            <p key={i} className={log.type === 'stderr' || log.type === 'error' ? 'text-red-300' : 'text-gray-200'}>
               {`> ${log.text}`}
             </p>
           ))}
@@ -249,7 +349,7 @@ export const Evaluation = () => {
       {error && !isRunning && (
         <div className="text-center p-8 bg-red-50 text-red-700 rounded-lg m-4">
           <XCircle className="w-12 h-12 mx-auto mb-4" />
-          <h3 className="text-xl font-bold">An Error Occurred</h3>
+          <h3 className="text-xl font-bold">Error</h3>
           <p>{error}</p>
         </div>
       )}
@@ -257,27 +357,28 @@ export const Evaluation = () => {
       {!loading && !error && results.length === 0 && !isRunning && (
         <div className="text-center p-8 bg-yellow-50 text-yellow-800 rounded-lg m-4">
           <CheckCircle className="w-12 h-12 mx-auto mb-4" />
-          <h3 className="text-xl font-bold">No Evaluation Results Found</h3>
+          <h3 className="text-xl font-bold">No Results</h3>
           <p>
-            Click "Run Evaluation" to generate the results.
+            Click "Run" to generate the results.
           </p>
         </div>
       )}
       
       {!loading && results.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-12">#</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Prompt</th>
-                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">Relevance</th>
-                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">Helpfulness</th>
-                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">Logic</th>
-              </tr>
-            </thead>
+            <thead className="bg-purple-100">
+                          <tr>
+                            <th className="p-4 text-left text-xs font-semibold text-purple-800 uppercase tracking-wider w-12">#</th>
+                            <th className="p-4 text-left text-xs font-semibold text-purple-800 uppercase tracking-wider">User Prompt</th>
+                            <th className="p-4 text-xs font-semibold text-purple-800 uppercase tracking-wider">Relevance</th>
+                            <th className="p-4 text-xs font-semibold text-purple-800 uppercase tracking-wider">Helpfulness</th>
+                            <th className="p-4 text-xs font-semibold text-purple-800 uppercase tracking-wider">Logic</th>
+                            <th className="p-4 text-left text-xs font-semibold text-purple-800 uppercase tracking-wider">Analysis</th>
+                          </tr>
+                        </thead>
             {results.map((item, index) => (
-              <EvaluationRow key={item.id || index} item={item} index={index} />
+              <EvaluationRow key={item.id || index} item={item} index={index} prompts={prompts} />
             ))}
           </table>
         </div>

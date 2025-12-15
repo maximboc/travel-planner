@@ -212,7 +212,39 @@ def hotel_node(
     elif "```" in content:
         content = content.split("```")[1].split("```")[0]
 
-    selection_data = json.loads(content.strip())
+    try:
+        selection_data = json.loads(content.strip())
+    except json.JSONDecodeError:
+        print("   ⚠️ JSON decoding failed. Trying to fix...")
+        import re
+        
+        # Regex to find patterns like "total_price": 2119.61 * 5
+        pattern = re.compile(r'"total_price":\s*([\d.]+\s*\*\s*[\d.]+)')
+        match = pattern.search(content)
+        
+        if match:
+            expression = match.group(1)
+            try:
+                # Using eval is a security risk, but in this controlled context of simple multiplication, it's acceptable.
+                result = eval(expression)
+                # Replace the expression with the result in the content string
+                content = content.replace(expression, str(result))
+                selection_data = json.loads(content.strip())
+                print("   ✅ JSON fixed and parsed successfully.")
+            except Exception as e:
+                print(f"   ⚠️ Failed to fix and parse JSON: {e}")
+                # Handle failure: maybe ask user or fallback
+                state.needs_user_input = True
+                state.validation_question = "I'm having trouble understanding the hotel information. Could you clarify?"
+                state.messages.append(AIMessage(content=state.validation_question))
+                return state
+        else:
+            # If no specific pattern is matched, re-raise or handle generically
+            print("   ⚠️ Could not find a specific pattern to fix in JSON.")
+            state.needs_user_input = True
+            state.validation_question = "I'm having trouble understanding the hotel information. Could you clarify?"
+            state.messages.append(AIMessage(content=state.validation_question))
+            return state
     selected_index = selection_data.get("selected_hotel_index", None)
 
     if (
