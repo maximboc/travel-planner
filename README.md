@@ -1,16 +1,18 @@
 # Travel Planner
 
 ## Authors
+
 This project was made by :
+
 - Matéo Lelong
 - Maxim Bocquillion
 - Samy Yacef
 
-
 [Link to the Demonstration](https://youtu.be/arBmsSlphOM)
 
-![travelbro](./assets/travelbro.png)
+[Report](./report.pdf)
 
+![travelbro](./assets/travelbro.png)
 
 ## Environment Variables (.env)
 
