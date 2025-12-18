@@ -8,8 +8,11 @@ This project was made by :
 - Maxim Bocquillion
 - Samy Yacef
 
+## Deliverables
 [Link to the Demonstration (slides + project)](https://youtu.be/snWW102_3DU)
+
 [Link to the Demonstration (project only)](https://youtu.be/arBmsSlphOM)
+
 [Report](./report.pdf)
 
 ![travelbro](./assets/travelbro.png)
