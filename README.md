@@ -15,8 +15,6 @@ This project was made by :
 
 [Report](./report.pdf)
 
-![travelbro](./assets/travelbro.png)
-
 ## Environment Variables (.env)
 
 To use the Travel Planner, you need to set up your API keys in a .env file at the root of the project:
